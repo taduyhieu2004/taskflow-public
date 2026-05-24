@@ -8,6 +8,8 @@ import { DashboardPage } from '@/features/projects/dashboard-page';
 import { BoardPage } from '@/features/boards/board-page';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
 import { MembersPage } from '@/features/members/members-page';
+import { MyTasksPage } from '@/features/tasks/my-tasks-page';
+import { DueSoonPage } from '@/features/tasks/due-soon-page';
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +31,8 @@ export const router = createBrowserRouter([
           { path: '/projects/:projectId', element: <BoardPage /> },
           { path: '/projects/:projectId/members', element: <MembersPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
+          { path: '/my-tasks', element: <MyTasksPage /> },
+          { path: '/due-soon', element: <DueSoonPage /> },
         ],
       },
     ],

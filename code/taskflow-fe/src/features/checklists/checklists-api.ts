@@ -19,7 +19,7 @@ export const checklistsApi = {
 
   toggleItem: (itemId: number, completed: boolean) =>
     api
-      .put<ApiResponse<ChecklistItem>>(`/checklist-items/${itemId}`, { completed })
+      .patch<ApiResponse<ChecklistItem>>(`/checklist-items/${itemId}`, { completed })
       .then(unwrap),
 
   removeItem: (itemId: number) =>

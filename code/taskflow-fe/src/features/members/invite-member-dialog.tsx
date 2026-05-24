@@ -26,11 +26,13 @@ export function InviteMemberDialog({ open, onOpenChange, projectId }: Props) {
   const [pickedUserId, setPickedUserId] = useState<number | null>(null);
   const [role, setRole] = useState<Role>('EDITOR');
 
-  const { data: users = [], isFetching } = useQuery({
+  const { data: usersData, isFetching } = useQuery({
     queryKey: ['users', 'search', q],
     queryFn: () => authApi.searchUsers(q),
     enabled: q.trim().length >= 2,
   });
+
+  const users = usersData?.content ?? [];
 
   const addMutation = useMutation({
     mutationFn: () => projectsApi.addMember(projectId, pickedUserId!, role),

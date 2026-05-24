@@ -29,18 +29,36 @@ interface Props {
   labels: Label[];
   onTaskClick?: (task: Task) => void;
   onAddTask?: () => void;
+  onDelete?: () => void;
 }
 
-export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask }: Props) {
+export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask, onDelete }: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: `list-${list.id}`,
     data: { type: 'column', listId: list.id },
   });
   const [collapsed, setCollapsed] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  function handleDeleteClick() {
+    if (confirmDelete) {
+      onDelete?.();
+      setShowMenu(false);
+      setConfirmDelete(false);
+    } else {
+      setConfirmDelete(true);
+    }
+  }
+
+  function handleCloseMenu() {
+    setShowMenu(false);
+    setConfirmDelete(false);
+  }
 
   return (
     <div className="w-72 bg-gray-100 rounded-xl flex flex-col flex-shrink-0 max-h-full">
-      <div className="p-3 flex items-center justify-between">
+      <div className="p-3 flex items-center justify-between relative">
         <button
           className="flex items-center gap-2 hover:bg-white/50 rounded px-1 -mx-1"
           onClick={() => setCollapsed((v) => !v)}
@@ -49,13 +67,36 @@ export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask }: Pro
           <h3 className="font-semibold text-gray-900 text-sm">{list.name}</h3>
           <span className="text-xs text-gray-500">{tasks.length}</span>
         </button>
-        <div className="flex">
+        <div className="flex items-center">
           <button onClick={onAddTask} className="p-1 text-gray-400 hover:text-gray-700 hover:bg-white rounded">
             <Plus className="w-4 h-4" />
           </button>
-          <button className="p-1 text-gray-400 hover:text-gray-700 hover:bg-white rounded">
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu((m) => !m)}
+              className="p-1 text-gray-400 hover:text-gray-700 hover:bg-white rounded"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={handleCloseMenu} />
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-20">
+                  <button
+                    onClick={handleDeleteClick}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs font-medium transition",
+                      confirmDelete 
+                        ? "bg-rose-500 hover:bg-rose-600 text-white font-semibold rounded" 
+                        : "text-rose-600 hover:bg-rose-50"
+                    )}
+                  >
+                    {confirmDelete ? "⚠️ Xác nhận xóa?" : "Xóa cột này"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

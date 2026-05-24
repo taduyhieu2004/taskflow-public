@@ -2,6 +2,7 @@ import { api, unwrap } from '@/lib/api';
 import type { ApiResponse, PageResponse } from '@/types/api';
 import type {
   Board,
+  BoardList,
   CreateProjectRequest,
   Member,
   Project,
@@ -56,4 +57,12 @@ export const projectsApi = {
     api
       .put<ApiResponse<Member>>(`/projects/${projectId}/members/${userId}/role`, { role })
       .then(unwrap),
+
+  createList: (boardId: number, req: { name: string; description?: string }) =>
+    api
+      .post<ApiResponse<BoardList>>(`/boards/${boardId}/lists`, req)
+      .then(unwrap),
+
+  deleteList: (listId: number) =>
+    api.delete<ApiResponse<void>>(`/lists/${listId}`).then(unwrap),
 };

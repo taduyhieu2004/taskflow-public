@@ -10,17 +10,21 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Filter, Plus, Star } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Avatar } from '@/components/ui/avatar';
 import { BoardColumn } from '@/features/boards/board-column';
 import { TaskCard } from '@/features/boards/task-card';
+import { authApi } from '@/features/auth/auth-api';
+import { InviteMemberDialog } from '@/features/members/invite-member-dialog';
 import { projectsApi } from '@/features/projects/projects-api';
 import { labelsApi, tasksApi } from '@/features/tasks/tasks-api';
-import { QuickCreateTask } from '@/features/tasks/quick-create-task';
+import { CreateTaskDialog } from '@/features/tasks/create-task-dialog';
 import { TaskDetailPanel } from '@/features/tasks/task-detail-panel';
 import { extractErrorMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { BoardList } from '@/types/project';
 import type { Task } from '@/types/task';
 
@@ -32,6 +36,38 @@ export function BoardPage() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [creatingInList, setCreatingInList] = useState<number | null>(null);
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState<string>('');
+  const [filterAssignee, setFilterAssignee] = useState<number | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Fetch project members
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', projectId],
+    queryFn: () => projectsApi.members(projectId),
+    enabled: !!projectId,
+  });
+
+  // Fetch member profiles
+  const userQueries = useQueries({
+    queries: members.slice(0, 5).map((m) => ({
+      queryKey: ['user', m.user_id],
+      queryFn: () => authApi.getUser(m.user_id),
+      staleTime: 5 * 60_000,
+    })),
+  });
+
+  const userMap = useMemo(() => {
+    const map = new Map<number, import('@/types/auth').User>();
+    userQueries.forEach((q) => {
+      if (q.data) map.set(q.data.id, q.data);
+    });
+    return map;
+  }, [userQueries]);
 
   const projectQuery = useQuery({
     queryKey: ['project', projectId],
@@ -45,13 +81,29 @@ export function BoardPage() {
     enabled: !!projectId,
   });
 
-  const board = boardsQuery.data?.[0] ?? null;
-  const boardId = board?.id;
+  const boardIdFromList = boardsQuery.data?.[0]?.id ?? null;
+
+  const boardDetailQuery = useQuery({
+    queryKey: ['board', boardIdFromList],
+    queryFn: () => projectsApi.board(boardIdFromList!),
+    enabled: !!boardIdFromList,
+  });
+
+  const board = boardDetailQuery.data ?? null;
+  const boardId = board?.id ?? boardIdFromList;
 
   const tasksQuery = useQuery({
-    queryKey: ['tasks', 'board', boardId],
-    queryFn: () => tasksApi.list({ board_id: boardId!, size: 200 }),
-    enabled: !!boardId,
+    queryKey: ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee],
+    queryFn: () =>
+      tasksApi.list({
+        project_id: projectId,
+        board_id: boardId!,
+        size: 200,
+        q: searchQuery.trim() || undefined,
+        priority: filterPriority || undefined,
+        assignee_id: filterAssignee || undefined,
+      }),
+    enabled: !!boardId && !!projectId,
   });
 
   const labelsQuery = useQuery({
@@ -60,63 +112,88 @@ export function BoardPage() {
     enabled: !!projectId,
   });
 
-  const tasksByList = useMemo(() => {
-    const map = new Map<number, Task[]>();
-    (tasksQuery.data?.content ?? []).forEach((t) => {
-      const arr = map.get(t.list_id) ?? [];
-      arr.push(t);
-      map.set(t.list_id, arr);
-    });
-    map.forEach((arr) => arr.sort((a, b) => a.position - b.position));
-    return map;
-  }, [tasksQuery.data]);
+  const addColumnMutation = useMutation({
+    mutationFn: (name: string) =>
+      projectsApi.createList(boardId!, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', boardId] });
+      setAddingColumn(false);
+      setNewColumnName('');
+    },
+  });
+
+  const deleteColumnMutation = useMutation({
+    mutationFn: (listId: number) => projectsApi.deleteList(listId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', boardId] });
+    },
+  });
 
   const moveMutation = useMutation({
     mutationFn: ({ id, toListId, position }: { id: number; toListId: number; position?: number }) =>
       tasksApi.move(id, { to_list_id: toListId, position }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] });
+    },
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  function onDragStart(e: DragStartEvent) {
-    const t = (e.active.data.current as { type?: string; task?: Task } | undefined)?.task;
-    if (t) setActiveTask(t);
+  const tasks = tasksQuery.data?.content ?? [];
+
+  const tasksByList = useMemo(() => {
+    const map = new Map<number, Task[]>();
+    tasks.forEach((t) => {
+      const list = map.get(t.list_id) ?? [];
+      list.push(t);
+      map.set(t.list_id, list);
+    });
+    // Sort tasks in each list by position
+    map.forEach((list) => list.sort((a, b) => a.position - b.position));
+    return map;
+  }, [tasks]);
+
+  function onDragStart(event: DragStartEvent) {
+    const { active } = event;
+    const task = tasks.find((t) => t.id === Number(active.id)) ?? null;
+    setActiveTask(task);
   }
 
-  function onDragEnd(e: DragEndEvent) {
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
     setActiveTask(null);
-    const { active, over } = e;
-    if (!over) return;
+    if (!over || !boardId) return;
 
-    const activeData = active.data.current as { type?: string; task?: Task } | undefined;
-    const overData = over.data.current as { type?: string; task?: Task; listId?: number } | undefined;
-    const draggedTask = activeData?.task;
+    const draggedTask = tasks.find((t) => t.id === Number(active.id));
     if (!draggedTask) return;
 
-    let toListId: number | undefined;
-    let position: number | undefined;
+    let toListId: number | null = null;
+    let position: number | undefined = undefined;
 
-    if (overData?.type === 'column') {
-      toListId = overData.listId;
-      position = (tasksByList.get(toListId!)?.length ?? 0);
-    } else if (overData?.type === 'task' && overData.task) {
-      toListId = overData.task.list_id;
-      const list = tasksByList.get(toListId) ?? [];
-      const idx = list.findIndex((t) => t.id === overData.task!.id);
-      position = idx >= 0 ? idx : list.length;
+    if (over.data.current?.type === 'Column') {
+      toListId = Number(over.id);
+      const listTasks = tasksByList.get(toListId) ?? [];
+      position = listTasks.length;
+    } else if (over.data.current?.type === 'Task') {
+      const overTask = tasks.find((t) => t.id === Number(over.id));
+      if (overTask) {
+        toListId = overTask.list_id;
+        position = overTask.position;
+      }
     }
 
-    if (toListId == null) return;
-    if (toListId === draggedTask.list_id && position === draggedTask.position) return;
+    if (toListId === null) return;
 
-    queryClient.setQueryData(
-      ['tasks', 'board', boardId],
-      (old: { content?: Task[] } | undefined) => {
-        if (!old?.content) return old;
+    if (draggedTask.list_id === toListId && draggedTask.position === position) return;
+
+    // Optimistic update
+    queryClient.setQueryData<import('@/types/api').PageResponse<Task>>(
+      ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee],
+      (old) => {
+        if (!old) return old;
         const updated = old.content.map((t) =>
           t.id === draggedTask.id ? { ...t, list_id: toListId!, position: position ?? 0 } : t,
         );
@@ -125,6 +202,12 @@ export function BoardPage() {
     );
 
     moveMutation.mutate({ id: draggedTask.id, toListId, position });
+  }
+
+  function handleAddColumn() {
+    const trimmed = newColumnName.trim();
+    if (!trimmed || !boardId) return;
+    addColumnMutation.mutate(trimmed);
   }
 
   const project = projectQuery.data;
@@ -147,18 +230,119 @@ export function BoardPage() {
             <button className="p-1 text-gray-400 hover:text-amber-500"><Star className="w-4 h-4" /></button>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-1.5">
-              <Filter className="w-4 h-4" /> Lọc
-            </button>
-            <Link
-              to={`/projects/${projectId}/members`}
-              className="px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-50 rounded-lg"
+            <button
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              className={cn(
+                'px-3 py-1.5 text-sm rounded-lg flex items-center gap-1.5 transition',
+                filtersOpen ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700 hover:bg-gray-100',
+              )}
             >
-              Members
-            </Link>
+              <Filter className="w-4 h-4" /> Lọc
+              {(searchQuery || filterPriority || filterAssignee) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
+              )}
+            </button>
+            <div className="flex items-center gap-3">
+              {/* Stacked Avatars */}
+              <Link 
+                to={`/projects/${projectId}/members`}
+                className="flex -space-x-1.5 overflow-hidden hover:opacity-80 transition py-0.5"
+                title="Quản lý thành viên"
+              >
+                {members.slice(0, 4).map((m) => {
+                  const u = userMap.get(m.user_id);
+                  return (
+                    <Avatar 
+                      key={m.id} 
+                      name={u?.full_name ?? u?.username ?? `U${m.user_id}`} 
+                      seed={m.user_id} 
+                      size="sm" 
+                      ringClass="ring-2 ring-white"
+                    />
+                  );
+                })}
+                {members.length > 4 && (
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-[10px] font-bold text-gray-600 ring-2 ring-white">
+                    +{members.length - 4}
+                  </div>
+                )}
+              </Link>
+
+              {/* Invite Button */}
+              <button
+                onClick={() => setInviteOpen(true)}
+                className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-gray-50 rounded-full border border-dashed border-gray-300 transition flex items-center justify-center"
+                title="Mời thành viên mới"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {filtersOpen && (
+        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex flex-wrap items-center gap-3.5 flex-shrink-0 transition-all duration-200">
+          {/* Search input */}
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              placeholder="Tìm kiếm task..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+            />
+          </div>
+
+          {/* Priority dropdown */}
+          <div className="min-w-[140px]">
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-gray-700 transition"
+            >
+              <option value="">-- Độ ưu tiên --</option>
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="URGENT">URGENT</option>
+            </select>
+          </div>
+
+          {/* Assignee dropdown */}
+          <div className="min-w-[180px]">
+            <select
+              value={filterAssignee ?? ''}
+              onChange={(e) => setFilterAssignee(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-gray-700 transition"
+            >
+              <option value="">-- Người thực hiện --</option>
+              {members.map((m) => {
+                const u = userMap.get(m.user_id);
+                return (
+                  <option key={m.id} value={m.user_id}>
+                    {u?.full_name ?? u?.username ?? `User #${m.user_id}`}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Clear button */}
+          {(searchQuery || filterPriority || filterAssignee) && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setFilterPriority('');
+                setFilterAssignee(null);
+              }}
+              className="px-3.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-100 rounded-lg transition"
+            >
+              Xoá bộ lọc
+            </button>
+          )}
+        </div>
+      )}
 
       {boardsQuery.isError && (
         <div className="m-6 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-3">
@@ -180,19 +364,54 @@ export function BoardPage() {
                       labels={labels}
                       onTaskClick={(t) => setOpenTaskId(t.id)}
                       onAddTask={() => setCreatingInList(list.id)}
+                      onDelete={() => deleteColumnMutation.mutate(list.id)}
                     />
-                    {creatingInList === list.id && boardId && (
-                      <div className="-mt-1">
-                        <QuickCreateTask listId={list.id} boardId={boardId} onClose={() => setCreatingInList(null)} />
-                      </div>
-                    )}
                   </div>
                 );
               })}
 
-              <button className="w-72 h-32 rounded-xl border-2 border-dashed border-gray-300 hover:border-primary-500 hover:bg-primary-50/30 transition flex items-center justify-center text-gray-500 hover:text-primary-600 font-medium text-sm flex-shrink-0">
-                <Plus className="w-4 h-4 mr-1" /> Thêm cột
-              </button>
+              {addingColumn ? (
+                <div className="w-72 bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex-shrink-0">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Nhập tên cột..."
+                    value={newColumnName}
+                    onChange={(e) => setNewColumnName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddColumn();
+                      if (e.key === 'Escape') { setAddingColumn(false); setNewColumnName(''); }
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    disabled={addColumnMutation.isPending}
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={handleAddColumn}
+                      disabled={!newColumnName.trim() || addColumnMutation.isPending}
+                      className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {addColumnMutation.isPending ? 'Đang tạo…' : 'Thêm cột'}
+                    </button>
+                    <button
+                      onClick={() => { setAddingColumn(false); setNewColumnName(''); }}
+                      className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      Huỷ
+                    </button>
+                  </div>
+                  {addColumnMutation.isError && (
+                    <p className="text-xs text-rose-600 mt-2">{extractErrorMessage(addColumnMutation.error)}</p>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingColumn(true)}
+                  className="w-72 h-32 rounded-xl border-2 border-dashed border-gray-300 hover:border-primary-500 hover:bg-primary-50/30 transition flex items-center justify-center text-gray-500 hover:text-primary-600 font-medium text-sm flex-shrink-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Thêm cột
+                </button>
+              )}
             </div>
           </div>
 
@@ -209,6 +428,23 @@ export function BoardPage() {
         projectKey={project?.key}
         onClose={() => setOpenTaskId(null)}
       />
+
+      {creatingInList !== null && boardId && (
+        <CreateTaskDialog
+          listId={creatingInList}
+          boardId={boardId}
+          projectId={projectId}
+          onClose={() => setCreatingInList(null)}
+        />
+      )}
+
+      {inviteOpen && (
+        <InviteMemberDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          projectId={projectId}
+        />
+      )}
     </div>
   );
 }
