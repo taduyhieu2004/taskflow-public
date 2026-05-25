@@ -26,6 +26,22 @@ export const authApi = {
 
   me: () => api.get<ApiResponse<User>>('/users/me').then(unwrap),
 
+  updateMe: (req: { full_name?: string; avatar_url?: string; bio?: string; dob?: string }) =>
+    api.put<ApiResponse<User>>('/users/me', req).then(unwrap),
+
+  changePassword: (req: { old_password: string; new_password: string }) =>
+    api.post<ApiResponse<void>>('/auth/change-password', req).then(unwrap),
+
+  uploadAvatar: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api
+      .post<ApiResponse<User>>('/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then(unwrap);
+  },
+
   searchUsers: (q: string) =>
     api.get<ApiResponse<{ content: User[] }>>('/users', { params: { q } }).then(unwrap),
 

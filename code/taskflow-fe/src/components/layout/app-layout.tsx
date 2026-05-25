@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
+import { ToastViewport } from '@/components/ui/toast';
 import { authApi } from '@/features/auth/auth-api';
 import { useNotificationsStream } from '@/features/notifications/use-notifications-stream';
 import { useAuthStore } from '@/stores/auth-store';
@@ -29,6 +30,7 @@ export function AppLayout() {
       <main className="ml-60 pt-14 min-h-screen">
         <Outlet />
       </main>
+      <ToastViewport />
     </div>
   );
 }

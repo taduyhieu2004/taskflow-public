@@ -9,19 +9,27 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import {
+  arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Filter, Plus, Star } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { ChevronRight, Filter, Plus, Star, Tag, Target } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
 import { BoardColumn } from '@/features/boards/board-column';
+import { InsertColumnGap } from '@/features/boards/insert-column-gap';
 import { TaskCard } from '@/features/boards/task-card';
 import { authApi } from '@/features/auth/auth-api';
 import { InviteMemberDialog } from '@/features/members/invite-member-dialog';
 import { projectsApi } from '@/features/projects/projects-api';
 import { labelsApi, tasksApi } from '@/features/tasks/tasks-api';
+import { sprintsApi } from '@/features/sprints/sprints-api';
 import { CreateTaskDialog } from '@/features/tasks/create-task-dialog';
+import { ManageLabelsDialog } from '@/features/tasks/manage-labels-dialog';
 import { TaskDetailPanel } from '@/features/tasks/task-detail-panel';
 import { extractErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -32,18 +40,46 @@ export function BoardPage() {
   const { projectId: projectIdParam } = useParams();
   const projectId = Number(projectIdParam);
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeColumn, setActiveColumn] = useState<BoardList | null>(null);
   const [creatingInList, setCreatingInList] = useState<number | null>(null);
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
+
+  // Deep link: ?task=ID mở task detail panel
+  useEffect(() => {
+    const t = searchParams.get('task');
+    if (t) {
+      const n = Number(t);
+      if (Number.isFinite(n) && n > 0) setOpenTaskId(n);
+    }
+  }, [searchParams]);
+
+  function closeTaskDetail() {
+    setOpenTaskId(null);
+    if (searchParams.has('task')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('task');
+      setSearchParams(next, { replace: true });
+    }
+  }
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [labelsManagerOpen, setLabelsManagerOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('');
   const [filterAssignee, setFilterAssignee] = useState<number | null>(null);
+  const [filterSprint, setFilterSprint] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const { data: sprints = [] } = useQuery({
+    queryKey: ['sprints', projectId],
+    queryFn: () => sprintsApi.list(projectId),
+    enabled: !!projectId,
+  });
 
   // Fetch project members
   const { data: members = [] } = useQuery({
@@ -93,7 +129,7 @@ export function BoardPage() {
   const boardId = board?.id ?? boardIdFromList;
 
   const tasksQuery = useQuery({
-    queryKey: ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee],
+    queryKey: ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee, filterSprint],
     queryFn: () =>
       tasksApi.list({
         project_id: projectId,
@@ -102,6 +138,7 @@ export function BoardPage() {
         q: searchQuery.trim() || undefined,
         priority: filterPriority || undefined,
         assignee_id: filterAssignee || undefined,
+        sprint_id: filterSprint || undefined,
       }),
     enabled: !!boardId && !!projectId,
   });
@@ -113,8 +150,8 @@ export function BoardPage() {
   });
 
   const addColumnMutation = useMutation({
-    mutationFn: (name: string) =>
-      projectsApi.createList(boardId!, { name }),
+    mutationFn: (req: { name: string; position?: number }) =>
+      projectsApi.createList(boardId!, req),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', boardId] });
       setAddingColumn(false);
@@ -124,6 +161,14 @@ export function BoardPage() {
 
   const deleteColumnMutation = useMutation({
     mutationFn: (listId: number) => projectsApi.deleteList(listId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', boardId] });
+    },
+  });
+
+  const reorderColumnsMutation = useMutation({
+    mutationFn: (items: { id: number; position: number }[]) =>
+      projectsApi.reorderLists(boardId!, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', boardId] });
     },
@@ -158,15 +203,53 @@ export function BoardPage() {
 
   function onDragStart(event: DragStartEvent) {
     const { active } = event;
+    if (active.data.current?.type === 'Column') {
+      const listId = active.data.current.listId as number;
+      const col = (boardDetailQuery.data?.lists ?? []).find((l) => l.id === listId) ?? null;
+      setActiveColumn(col);
+      setActiveTask(null);
+      return;
+    }
     const task = tasks.find((t) => t.id === Number(active.id)) ?? null;
     setActiveTask(task);
+    setActiveColumn(null);
   }
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveTask(null);
+    setActiveColumn(null);
     if (!over || !boardId) return;
 
+    // ---- Column reorder ----
+    if (active.data.current?.type === 'Column') {
+      if (over.data.current?.type !== 'Column') return;
+      const fromId = active.data.current.listId as number;
+      const toId = over.data.current.listId as number;
+      if (fromId === toId) return;
+
+      const sorted = (boardDetailQuery.data?.lists ?? [])
+        .slice()
+        .sort((a, b) => a.position - b.position);
+      const oldIndex = sorted.findIndex((l) => l.id === fromId);
+      const newIndex = sorted.findIndex((l) => l.id === toId);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      const reordered = arrayMove(sorted, oldIndex, newIndex).map((l, idx) => ({
+        ...l,
+        position: idx,
+      }));
+
+      queryClient.setQueryData<import('@/types/project').Board>(['board', boardId], (old) => {
+        if (!old) return old;
+        return { ...old, lists: reordered };
+      });
+
+      reorderColumnsMutation.mutate(reordered.map((l) => ({ id: l.id, position: l.position })));
+      return;
+    }
+
+    // ---- Task move ----
     const draggedTask = tasks.find((t) => t.id === Number(active.id));
     if (!draggedTask) return;
 
@@ -174,7 +257,7 @@ export function BoardPage() {
     let position: number | undefined = undefined;
 
     if (over.data.current?.type === 'Column') {
-      toListId = Number(over.id);
+      toListId = over.data.current.listId as number;
       const listTasks = tasksByList.get(toListId) ?? [];
       position = listTasks.length;
     } else if (over.data.current?.type === 'Task') {
@@ -191,7 +274,7 @@ export function BoardPage() {
 
     // Optimistic update
     queryClient.setQueryData<import('@/types/api').PageResponse<Task>>(
-      ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee],
+      ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee, filterSprint],
       (old) => {
         if (!old) return old;
         const updated = old.content.map((t) =>
@@ -207,7 +290,12 @@ export function BoardPage() {
   function handleAddColumn() {
     const trimmed = newColumnName.trim();
     if (!trimmed || !boardId) return;
-    addColumnMutation.mutate(trimmed);
+    addColumnMutation.mutate({ name: trimmed });
+  }
+
+  function handleInsertColumn(position: number, name: string) {
+    if (!boardId) return;
+    addColumnMutation.mutate({ name, position });
   }
 
   const project = projectQuery.data;
@@ -238,10 +326,27 @@ export function BoardPage() {
               )}
             >
               <Filter className="w-4 h-4" /> Lọc
-              {(searchQuery || filterPriority || filterAssignee) && (
+              {(searchQuery || filterPriority || filterAssignee || filterSprint) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
               )}
             </button>
+            <button
+              onClick={() => setLabelsManagerOpen(true)}
+              className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-1.5 transition"
+              title="Quản lý nhãn của project"
+            >
+              <Tag className="w-4 h-4" /> Nhãn
+              {labelsQuery.data && labelsQuery.data.length > 0 && (
+                <span className="text-xs text-gray-500">({labelsQuery.data.length})</span>
+              )}
+            </button>
+            <Link
+              to={`/projects/${projectId}/sprints`}
+              className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-1.5 transition"
+              title="Quản lý sprint"
+            >
+              <Target className="w-4 h-4" /> Sprints
+            </Link>
             <div className="flex items-center gap-3">
               {/* Stacked Avatars */}
               <Link 
@@ -328,13 +433,30 @@ export function BoardPage() {
             </select>
           </div>
 
+          {/* Sprint dropdown */}
+          <div className="min-w-[180px]">
+            <select
+              value={filterSprint ?? ''}
+              onChange={(e) => setFilterSprint(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-gray-700 transition"
+            >
+              <option value="">-- Sprint --</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Clear button */}
-          {(searchQuery || filterPriority || filterAssignee) && (
+          {(searchQuery || filterPriority || filterAssignee || filterSprint) && (
             <button
               onClick={() => {
                 setSearchQuery('');
                 setFilterPriority('');
                 setFilterAssignee(null);
+                setFilterSprint(null);
               }}
               className="px-3.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-100 rounded-lg transition"
             >
@@ -353,23 +475,35 @@ export function BoardPage() {
       {board && (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 scrollbar-thin">
-            <div className="flex gap-4 h-full min-w-max items-start">
-              {lists.map((list) => {
-                const listTasks = tasksByList.get(list.id) ?? [];
-                return (
-                  <div key={list.id} className="h-full">
-                    <BoardColumn
-                      list={list}
-                      tasks={listTasks}
-                      labels={labels}
-                      onTaskClick={(t) => setOpenTaskId(t.id)}
-                      onAddTask={() => setCreatingInList(list.id)}
-                      onDelete={() => deleteColumnMutation.mutate(list.id)}
-                    />
-                  </div>
-                );
-              })}
+            <div className="flex gap-1 h-full min-w-max items-stretch">
+              <SortableContext
+                items={lists.map((l) => `col-${l.id}`)}
+                strategy={horizontalListSortingStrategy}
+              >
+                {lists.map((list, idx) => {
+                  const listTasks = tasksByList.get(list.id) ?? [];
+                  return (
+                    <div key={list.id} className="flex items-stretch h-full">
+                      <BoardColumn
+                        list={list}
+                        tasks={listTasks}
+                        labels={labels}
+                        onTaskClick={(t) => setOpenTaskId(t.id)}
+                        onAddTask={() => setCreatingInList(list.id)}
+                        onDelete={() => deleteColumnMutation.mutate(list.id)}
+                      />
+                      {idx < lists.length - 1 && (
+                        <InsertColumnGap
+                          onSubmit={(name) => handleInsertColumn(idx + 1, name)}
+                          isPending={addColumnMutation.isPending}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </SortableContext>
 
+              <div className="w-3 flex-shrink-0" />
               {addingColumn ? (
                 <div className="w-72 bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex-shrink-0">
                   <input
@@ -417,6 +551,14 @@ export function BoardPage() {
 
           <DragOverlay>
             {activeTask ? <TaskCard task={activeTask} labels={labels} /> : null}
+            {activeColumn ? (
+              <div className="w-72 bg-gray-100 rounded-xl border border-primary-400 shadow-xl p-3 opacity-90">
+                <div className="text-sm font-semibold text-gray-900">{activeColumn.name}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {(tasksByList.get(activeColumn.id) ?? []).length} task
+                </div>
+              </div>
+            ) : null}
           </DragOverlay>
         </DndContext>
       )}
@@ -426,7 +568,7 @@ export function BoardPage() {
         lists={lists}
         projectId={projectId}
         projectKey={project?.key}
-        onClose={() => setOpenTaskId(null)}
+        onClose={closeTaskDetail}
       />
 
       {creatingInList !== null && boardId && (
@@ -442,6 +584,14 @@ export function BoardPage() {
         <InviteMemberDialog
           open={inviteOpen}
           onOpenChange={setInviteOpen}
+          projectId={projectId}
+        />
+      )}
+
+      {labelsManagerOpen && (
+        <ManageLabelsDialog
+          open={labelsManagerOpen}
+          onOpenChange={setLabelsManagerOpen}
           projectId={projectId}
         />
       )}

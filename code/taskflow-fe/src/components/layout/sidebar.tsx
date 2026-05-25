@@ -1,16 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Folder, LayoutDashboard, LogOut, Plus, UserCheck } from 'lucide-react';
+import { Clock, Folder, LayoutDashboard, LogOut, Plus, UserCheck, UserCog } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
+import { ProfileDialog } from '@/features/auth/profile-dialog';
 import { CreateProjectDialog } from '@/features/projects/create-project-dialog';
 import { projectsApi } from '@/features/projects/projects-api';
+import { resolveAvatarUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function Sidebar() {
   const { user, logout } = useAuthStore();
   const [createOpen, setCreateOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -64,13 +67,31 @@ export function Sidebar() {
 
       <div className="border-t border-gray-100 p-3">
         <div className="flex items-center gap-2.5 px-2 py-2">
-          <Avatar name={user?.full_name ?? user?.username} seed={user?.id} size="md" />
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 truncate">
-              {user?.full_name ?? user?.username}
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:bg-gray-50 rounded-lg px-1 -mx-1 py-1 -my-1 transition group"
+            title="Xem hồ sơ"
+          >
+            <Avatar
+              name={user?.full_name ?? user?.username}
+              src={resolveAvatarUrl(user?.avatar_url)}
+              seed={user?.id}
+              size="md"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-gray-900 truncate group-hover:text-primary-700 transition">
+                {user?.full_name ?? user?.username}
+              </div>
+              <div className="text-xs text-gray-500 truncate">{user?.email}</div>
             </div>
-            <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-          </div>
+          </button>
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition"
+            title="Hồ sơ"
+          >
+            <UserCog className="w-4 h-4" />
+          </button>
           <button
             onClick={logout}
             className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition"
@@ -82,6 +103,7 @@ export function Sidebar() {
       </div>
 
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </aside>
   );
 }

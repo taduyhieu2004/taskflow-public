@@ -4,6 +4,19 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1';
 
+export const apiBaseUrl = baseURL;
+
+/**
+ * Resolve avatar_url stored as MinIO key (e.g. "u3/abc.jpg") to a full URL the
+ * browser can load directly. Full URLs (http/https) are returned unchanged so
+ * older user records keep working.
+ */
+export function resolveAvatarUrl(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${baseURL}/users/avatars/${value}`;
+}
+
 export const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { projectsApi } from '@/features/projects/projects-api';
 import { tasksApi } from '@/features/tasks/tasks-api';
+import { useDoneListIds } from '@/lib/use-done-list-ids';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Priority, Task } from '@/types/task';
@@ -40,13 +41,15 @@ export function DueSoonPage() {
     return new Map(projects.map((p) => [p.id, p]));
   }, [projects]);
 
+  const allTasks = tasksData?.content ?? [];
+  const doneListIds = useDoneListIds(allTasks.map((t) => t.board_id));
+
   const sortedTasks = useMemo(() => {
-    const tasks = tasksData?.content ?? [];
-    return tasks
-      .filter((t) => t.due_date != null)
+    return allTasks
+      .filter((t) => t.due_date != null && !doneListIds.has(t.list_id))
       .slice()
       .sort((a, b) => a.due_date! - b.due_date!);
-  }, [tasksData]);
+  }, [allTasks, doneListIds]);
 
   // Categorize tasks
   const categories = useMemo(() => {

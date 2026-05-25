@@ -13,6 +13,7 @@ export interface TaskFilter {
   project_id?: number;
   board_id?: number;
   list_id?: number;
+  sprint_id?: number;
   assignee_id?: number;
   priority?: string;
   q?: string;
@@ -48,7 +49,16 @@ export const labelsApi = {
       .then(unwrap),
 
   create: (req: CreateLabelRequest) =>
-    api.post<ApiResponse<Label>>('/labels', req).then(unwrap),
+    api
+      .post<ApiResponse<Label>>(
+        '/labels',
+        { name: req.name, color: req.color },
+        { params: { project_id: req.project_id } },
+      )
+      .then(unwrap),
+
+  update: (id: number, req: { name: string; color: string }) =>
+    api.put<ApiResponse<Label>>(`/labels/${id}`, req).then(unwrap),
 
   remove: (id: number) =>
     api.delete<ApiResponse<void>>(`/labels/${id}`).then(unwrap),

@@ -58,11 +58,16 @@ export const projectsApi = {
       .put<ApiResponse<Member>>(`/projects/${projectId}/members/${userId}/role`, { role })
       .then(unwrap),
 
-  createList: (boardId: number, req: { name: string; description?: string }) =>
+  createList: (boardId: number, req: { name: string; description?: string; position?: number }) =>
     api
       .post<ApiResponse<BoardList>>(`/boards/${boardId}/lists`, req)
       .then(unwrap),
 
   deleteList: (listId: number) =>
     api.delete<ApiResponse<void>>(`/lists/${listId}`).then(unwrap),
+
+  reorderLists: (boardId: number, items: { id: number; position: number }[]) =>
+    api
+      .patch<ApiResponse<BoardList[]>>(`/boards/${boardId}/lists/reorder`, { items })
+      .then(unwrap),
 };

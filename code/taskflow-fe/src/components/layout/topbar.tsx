@@ -1,11 +1,18 @@
-import { Moon, Search, SquareKanban } from 'lucide-react';
+import { LogOut, Moon, Search, SquareKanban, UserCog } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ProfileDialog } from '@/features/auth/profile-dialog';
 import { NotificationsDropdown } from '@/features/notifications/notifications-dropdown';
+import { resolveAvatarUrl } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function Topbar() {
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const [profileOpen, setProfileOpen] = useState(false);
+
   return (
     <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-30 h-14">
       <div className="h-full px-4 flex items-center justify-between gap-4">
@@ -31,11 +38,59 @@ export function Topbar() {
             <Moon className="w-5 h-5" />
           </button>
           <NotificationsDropdown />
-          <button className="flex items-center gap-2 p-1 hover:bg-gray-100 rounded-lg" title={user?.username}>
-            <Avatar name={user?.full_name ?? user?.username} seed={user?.id} size="md" />
-          </button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="flex items-center gap-2 p-1 hover:bg-gray-100 rounded-lg"
+                title={user?.username}
+              >
+                <Avatar
+                  name={user?.full_name ?? user?.username}
+                  src={resolveAvatarUrl(user?.avatar_url)}
+                  seed={user?.id}
+                  size="md"
+                />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-60 p-0 overflow-hidden" align="end">
+              <div className="px-3 py-3 bg-gradient-to-br from-primary-50 to-blue-50 border-b border-gray-100">
+                <div className="flex items-center gap-2.5">
+                  <Avatar
+                    name={user?.full_name ?? user?.username}
+                    src={resolveAvatarUrl(user?.avatar_url)}
+                    seed={user?.id}
+                    size="md"
+                    ringClass="ring-2 ring-white"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">
+                      {user?.full_name ?? user?.username}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{user?.email}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="py-1">
+                <button
+                  onClick={() => setProfileOpen(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <UserCog className="w-4 h-4 text-gray-400" /> Hồ sơ cá nhân
+                </button>
+                <button
+                  onClick={logout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
+                >
+                  <LogOut className="w-4 h-4" /> Đăng xuất
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
+
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </header>
   );
 }

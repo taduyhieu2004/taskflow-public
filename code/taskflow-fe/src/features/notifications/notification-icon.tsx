@@ -1,4 +1,4 @@
-import { Bell, Calendar, FileText, Folder, MessageCircle, UserCheck, UserPlus } from 'lucide-react';
+import { Bell, Calendar, FileText, Folder, MessageCircle, Trash2, UserCheck, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -15,6 +15,7 @@ const TYPE_ICON: Record<string, { icon: React.ReactNode; bg: string }> = {
   ATTACHMENT_UPLOADED: { icon: <FileText className="w-4 h-4" />, bg: 'bg-violet-100 text-violet-600' },
   PROJECT_INVITED: { icon: <UserPlus className="w-4 h-4" />, bg: 'bg-amber-100 text-amber-600' },
   PROJECT_REMOVED: { icon: <Folder className="w-4 h-4" />, bg: 'bg-rose-100 text-rose-600' },
+  TASK_DELETED: { icon: <Trash2 className="w-4 h-4" />, bg: 'bg-rose-100 text-rose-600' },
 };
 
 export function NotificationIcon({ type, className }: Props) {

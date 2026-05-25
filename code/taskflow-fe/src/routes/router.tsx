@@ -5,7 +5,10 @@ import { LoginPage } from '@/features/auth/login-page';
 import { RegisterPage } from '@/features/auth/register-page';
 import { ForgotPasswordPage } from '@/features/auth/forgot-password-page';
 import { DashboardPage } from '@/features/projects/dashboard-page';
+import { ProjectsPage } from '@/features/projects/projects-page';
 import { BoardPage } from '@/features/boards/board-page';
+import { SprintDetailPage } from '@/features/sprints/sprint-detail-page';
+import { SprintsPage } from '@/features/sprints/sprints-page';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
 import { MembersPage } from '@/features/members/members-page';
 import { MyTasksPage } from '@/features/tasks/my-tasks-page';
@@ -27,8 +30,10 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
-          { path: '/projects', element: <DashboardPage /> },
+          { path: '/projects', element: <ProjectsPage /> },
           { path: '/projects/:projectId', element: <BoardPage /> },
+          { path: '/projects/:projectId/sprints', element: <SprintsPage /> },
+          { path: '/projects/:projectId/sprints/:sprintId', element: <SprintDetailPage /> },
           { path: '/projects/:projectId/members', element: <MembersPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/my-tasks', element: <MyTasksPage /> },

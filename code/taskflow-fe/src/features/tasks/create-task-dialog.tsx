@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Calendar, FileText, Flag, Tag, User } from 'lucide-react';
+import { AlertCircle, Calendar, FileText, Flag, Tag, Target, User } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { authApi } from '@/features/auth/auth-api';
 import { projectsApi } from '@/features/projects/projects-api';
+import { sprintsApi } from '@/features/sprints/sprints-api';
 import { labelsApi, tasksApi } from '@/features/tasks/tasks-api';
 import { extractErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,13 @@ export function CreateTaskDialog({ listId, boardId, projectId, onClose }: Props)
   const [priority, setPriority] = useState<Priority>('MEDIUM');
   const [selectedLabelIds, setSelectedLabelIds] = useState<number[]>([]);
   const [dueDate, setDueDate] = useState('');
+  const [sprintId, setSprintId] = useState<number | null>(null);
+
+  const { data: sprints = [] } = useQuery({
+    queryKey: ['sprints', projectId],
+    queryFn: () => sprintsApi.list(projectId),
+    enabled: !!projectId,
+  });
 
   // Fetch project members
   const { data: members = [] } = useQuery({
@@ -103,6 +111,7 @@ export function CreateTaskDialog({ listId, boardId, projectId, onClose }: Props)
       priority,
       label_ids: selectedLabelIds.length > 0 ? selectedLabelIds : undefined,
       due_date: dueDate ? new Date(dueDate).getTime() : undefined,
+      sprint_id: sprintId || undefined,
     });
   }
 
@@ -225,6 +234,29 @@ export function CreateTaskDialog({ listId, boardId, projectId, onClose }: Props)
                 );
               })}
             </div>
+          </div>
+
+          {/* Sprint */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-gray-400" /> Sprint
+            </label>
+            {sprints.length === 0 ? (
+              <div className="text-xs text-gray-400 italic">Project chưa có sprint.</div>
+            ) : (
+              <select
+                value={sprintId ?? ''}
+                onChange={(e) => setSprintId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              >
+                <option value="">Không gắn sprint</option>
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.status})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Labels */}

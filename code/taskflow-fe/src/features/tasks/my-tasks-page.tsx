@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { projectsApi } from '@/features/projects/projects-api';
 import { tasksApi } from '@/features/tasks/tasks-api';
+import { useDoneListIds } from '@/lib/use-done-list-ids';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Priority } from '@/types/task';
@@ -41,20 +42,27 @@ export function MyTasksPage() {
   }, [projects]);
 
   const tasks = tasksData?.content ?? [];
+  const doneListIds = useDoneListIds(tasks.map((t) => t.board_id));
 
   // Metrics
   const metrics = useMemo(() => {
     const now = Date.now();
     let overdue = 0;
     let highPriority = 0;
+    let done = 0;
 
     tasks.forEach((t) => {
+      const isDone = doneListIds.has(t.list_id);
+      if (isDone) {
+        done++;
+        return; // task đã hoàn thành thì không tính trễ hạn hay ưu tiên cao
+      }
       if (t.due_date && t.due_date < now) overdue++;
       if (t.priority === 'HIGH' || t.priority === 'URGENT') highPriority++;
     });
 
-    return { total: tasks.length, overdue, highPriority };
-  }, [tasks]);
+    return { total: tasks.length, overdue, highPriority, done };
+  }, [tasks, doneListIds]);
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
@@ -120,23 +128,35 @@ export function MyTasksPage() {
           <div className="divide-y divide-gray-100">
             {tasks.map((task) => {
               const project = projectMap.get(task.project_id);
-              const isOverdue = task.due_date && task.due_date < Date.now();
+              const isDone = doneListIds.has(task.list_id);
+              const isOverdue = !isDone && task.due_date && task.due_date < Date.now();
 
               return (
-                <div key={task.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition">
+                <div key={task.id} className={cn(
+                  "p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition",
+                  isDone && "opacity-60",
+                )}>
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md tracking-wide uppercase">
                         {project?.name ?? `Project #${task.project_id}`}
                       </span>
-                      {task.priority && (
+                      {isDone && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          ✓ Hoàn thành
+                        </span>
+                      )}
+                      {task.priority && !isDone && (
                         <span className={cn('px-2 py-0.5 text-[10px] font-semibold border rounded-md flex items-center gap-1', PRIORITY_BADGE[task.priority])}>
                           <Flag className={cn('w-3 h-3', PRIORITY_ICON_COLOR[task.priority])} />
                           {task.priority}
                         </span>
                       )}
                     </div>
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                    <h3 className={cn(
+                      "font-semibold text-sm sm:text-base truncate",
+                      isDone ? "text-gray-500 line-through" : "text-gray-900",
+                    )}>
                       {task.title}
                     </h3>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">

@@ -1,199 +1,171 @@
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Filter, Folder, LayoutGrid, List, Plus, UserCheck } from 'lucide-react';
-import { useState } from 'react';
+import {
+  AlertCircle,
+  ArrowRight,
+  Bell,
+  CalendarClock,
+  ClipboardList,
+  Clock,
+  Folder,
+  Plus,
+  UserCheck,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CreateProjectDialog } from '@/features/projects/create-project-dialog';
 import { ProjectCard } from '@/features/projects/project-card';
 import { projectsApi } from '@/features/projects/projects-api';
-import { extractErrorMessage } from '@/lib/api';
+import { tasksApi } from '@/features/tasks/tasks-api';
+import { useDoneListIds } from '@/lib/use-done-list-ids';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+
+const DUE_SOON_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [createOpen, setCreateOpen] = useState(false);
-  const [view, setView] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: projectsApi.list,
   });
 
+  const myTasksQuery = useQuery({
+    queryKey: ['my-tasks', user?.id],
+    queryFn: () => tasksApi.list({ assignee_id: user!.id, size: 200 }),
+    enabled: !!user?.id,
+  });
+
   const projects = projectsQuery.data ?? [];
-  const filteredProjects = projects.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.key && p.key.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const myTasks = myTasksQuery.data?.content ?? [];
+  const doneListIds = useDoneListIds(myTasks.map((t) => t.board_id));
+
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const active = myTasks.filter((t) => !doneListIds.has(t.list_id));
+    const overdue = active.filter((t) => t.due_date != null && t.due_date < now).length;
+    const dueSoon = active.filter(
+      (t) => t.due_date != null && t.due_date >= now && t.due_date - now <= DUE_SOON_WINDOW_MS,
+    ).length;
+    return { overdue, dueSoon, activeCount: active.length };
+  }, [myTasks, doneListIds]);
+
+  const recentProjects = projects.slice(0, 3);
 
   return (
     <div className="p-8">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="text-sm text-gray-500">Xin chào, {user?.full_name ?? user?.username}</div>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">Project của bạn</h1>
+          <div className="text-sm text-gray-500">Xin chào,</div>
+          <h1 className="text-2xl font-bold text-gray-900 mt-1">
+            {user?.full_name ?? user?.username} 👋
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Tổng quan công việc và project của bạn hôm nay.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setFilterOpen(!filterOpen);
-              if (filterOpen) setSearchQuery('');
-            }}
-            className={cn(
-              'px-3 py-2 text-sm border rounded-lg flex items-center gap-2 transition',
-              filterOpen
-                ? 'bg-primary-50 border-primary-300 text-primary-700 font-medium'
-                : 'border-gray-300 bg-white hover:bg-gray-50 text-gray-700',
-            )}
-          >
-            <Filter className="w-4 h-4" /> Lọc
-            {searchQuery && (
-              <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
-            )}
-          </button>
-          <div className="bg-white border border-gray-300 rounded-lg p-0.5 flex">
-            <button
-              className={cn(
-                'p-1.5 rounded transition',
-                view === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700',
-              )}
-              onClick={() => setView('grid')}
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="px-3 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-1.5 shadow-sm transition"
+        >
+          <Plus className="w-4 h-4" /> Tạo project mới
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <StatCard
+          label="Tổng project"
+          value={projects.length}
+          icon={<Folder className="w-5 h-5" />}
+          color="primary"
+          to="/projects"
+        />
+        <StatCard
+          label="Task được giao"
+          value={myTasks.length}
+          icon={<UserCheck className="w-5 h-5" />}
+          color="amber"
+          to="/my-tasks"
+        />
+        <StatCard
+          label="Sắp đến hạn (3 ngày)"
+          value={stats.dueSoon}
+          icon={<CalendarClock className="w-5 h-5" />}
+          color="orange"
+          to="/due-soon"
+        />
+        <StatCard
+          label="Quá hạn"
+          value={stats.overdue}
+          icon={<AlertCircle className="w-5 h-5" />}
+          color="rose"
+          to="/due-soon"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-10">
+        <div className="lg:col-span-2">
+          <div className="flex items-baseline justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Project gần đây</h2>
+            <Link
+              to="/projects"
+              className="text-xs text-primary-600 hover:text-primary-700 font-medium inline-flex items-center gap-1"
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              className={cn(
-                'p-1.5 rounded transition',
-                view === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700',
-              )}
-              onClick={() => setView('list')}
-            >
-              <List className="w-4 h-4" />
-            </button>
+              Xem tất cả <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-        <StatCard label="Tổng project" value={projects.length} icon={<Folder className="w-5 h-5" />} color="primary" />
-        <StatCard label="Task được giao" value={0} icon={<UserCheck className="w-5 h-5" />} color="amber" />
-        <StatCard label="Sắp hết hạn" value={0} icon={<Clock className="w-5 h-5" />} color="rose" />
-      </div>
-
-      {filterOpen && (
-        <div className="mt-8 mb-4 max-w-md transition-all duration-200">
-          <input
-            type="text"
-            placeholder="Tìm kiếm project..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition shadow-sm"
-            autoFocus
-          />
-        </div>
-      )}
-
-      <div className="flex items-baseline justify-between mt-10 mb-4">
-        <h2 className="text-base font-semibold text-gray-900">Project gần đây</h2>
-        {projectsQuery.isFetching && <span className="text-xs text-gray-400">Đang tải…</span>}
-      </div>
-
-      {projectsQuery.isError && (
-        <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
-          {extractErrorMessage(projectsQuery.error)}
-        </div>
-      )}
-
-      {projectsQuery.isLoading ? (
-        <SkeletonGrid />
-      ) : view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProjects.map((p) => (
-            <ProjectCard key={p.id} project={p} />
-          ))}
-          {filteredProjects.length === 0 && searchQuery && (
-            <div className="col-span-full py-8 text-center text-sm text-gray-400">
-              Không tìm thấy project nào khớp với từ khoá.
+          {projectsQuery.isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+                  <div className="w-10 h-10 rounded-lg bg-gray-200" />
+                  <div className="h-5 bg-gray-200 rounded w-3/4 mt-3" />
+                  <div className="h-4 bg-gray-100 rounded w-full mt-2" />
+                </div>
+              ))}
+            </div>
+          ) : recentProjects.length === 0 ? (
+            <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+              <Folder className="w-10 h-10 text-gray-300 mx-auto" />
+              <p className="text-sm text-gray-500 mt-2">Bạn chưa có project nào.</p>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="mt-3 text-sm text-primary-600 hover:text-primary-700 font-medium inline-flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Tạo project đầu tiên
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recentProjects.map((p) => (
+                <ProjectCard key={p.id} project={p} />
+              ))}
             </div>
           )}
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="rounded-xl border-2 border-dashed border-gray-300 hover:border-primary-500 hover:bg-primary-50/30 transition p-5 flex flex-col items-center justify-center text-gray-500 hover:text-primary-600 min-h-[180px]"
-          >
-            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-              <Plus className="w-5 h-5" />
-            </div>
-            <span className="mt-3 font-medium">Tạo project mới</span>
-          </button>
         </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  <th className="px-6 py-3.5">Mã dự án</th>
-                  <th className="px-6 py-3.5">Tên dự án</th>
-                  <th className="px-6 py-3.5">Mô tả</th>
-                  <th className="px-6 py-3.5">Loại</th>
-                  <th className="px-6 py-3.5 text-right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredProjects.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50/50 transition">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold bg-primary-50 text-primary-700 uppercase tracking-wider">
-                        {p.key ?? p.name.substring(0, 3)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Link to={`/projects/${p.id}`} className="text-sm font-semibold text-gray-900 hover:text-primary-600 transition">
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 max-w-xs truncate text-sm text-gray-500">
-                      {p.description || <span className="text-gray-300 italic">Không có mô tả</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 uppercase">
-                        {p.type ?? 'SOFTWARE'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <Link 
-                        to={`/projects/${p.id}`}
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-primary-600 hover:text-primary-700 transition"
-                      >
-                        Vào bảng &rarr;
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-                {filteredProjects.length === 0 && searchQuery && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">
-                      Không tìm thấy project nào khớp với từ khoá.
-                    </td>
-                  </tr>
-                )}
-                <tr>
-                  <td colSpan={5} className="px-6 py-4">
-                    <button
-                      onClick={() => setCreateOpen(true)}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-primary-600 transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Tạo project mới</span>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Lối tắt</h2>
+          <div className="space-y-2">
+            <QuickLink to="/my-tasks" icon={<ClipboardList className="w-4 h-4" />}>
+              Task của tôi
+              <span className="ml-auto text-xs text-gray-400">{myTasks.length}</span>
+            </QuickLink>
+            <QuickLink to="/due-soon" icon={<Clock className="w-4 h-4" />}>
+              Sắp đến hạn
+              <span className="ml-auto text-xs text-gray-400">{stats.dueSoon}</span>
+            </QuickLink>
+            <QuickLink to="/notifications" icon={<Bell className="w-4 h-4" />}>
+              Thông báo
+            </QuickLink>
+            <QuickLink to="/projects" icon={<Folder className="w-4 h-4" />}>
+              Tất cả project
+              <span className="ml-auto text-xs text-gray-400">{projects.length}</span>
+            </QuickLink>
           </div>
         </div>
-      )}
+      </div>
 
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
@@ -205,15 +177,22 @@ function StatCard({
   value,
   icon,
   color,
+  to,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  color: 'primary' | 'amber' | 'rose';
+  color: 'primary' | 'amber' | 'orange' | 'rose';
+  to?: string;
 }) {
-  const bg = { primary: 'bg-primary-50 text-primary-600', amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600' }[color];
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+  const bg = {
+    primary: 'bg-primary-50 text-primary-600',
+    amber: 'bg-amber-50 text-amber-600',
+    orange: 'bg-orange-50 text-orange-600',
+    rose: 'bg-rose-50 text-rose-600',
+  }[color];
+  const content = (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 hover:shadow-sm transition">
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">{label}</div>
         <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center', bg)}>{icon}</div>
@@ -221,20 +200,25 @@ function StatCard({
       <div className="text-2xl font-bold text-gray-900 mt-2">{value}</div>
     </div>
   );
+  return to ? <Link to={to}>{content}</Link> : content;
 }
 
-function SkeletonGrid() {
+function QuickLink({
+  to,
+  icon,
+  children,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
-          <div className="w-10 h-10 rounded-lg bg-gray-200" />
-          <div className="h-5 bg-gray-200 rounded w-3/4 mt-3" />
-          <div className="h-4 bg-gray-100 rounded w-full mt-2" />
-          <div className="h-4 bg-gray-100 rounded w-2/3 mt-1" />
-          <div className="h-4 bg-gray-100 rounded w-full mt-4" />
-        </div>
-      ))}
-    </div>
+    <Link
+      to={to}
+      className="flex items-center gap-3 px-3 py-2.5 bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50/40 hover:text-primary-700 text-sm text-gray-700 transition"
+    >
+      <span className="text-gray-400">{icon}</span>
+      {children}
+    </Link>
   );
 }
