@@ -88,9 +88,9 @@ export function BoardPage() {
     enabled: !!projectId,
   });
 
-  // Fetch member profiles
+  // Fetch member profiles (bỏ slice 5: trước đây chỉ lookup 5 member đầu → các member sau hiện ID)
   const userQueries = useQueries({
-    queries: members.slice(0, 5).map((m) => ({
+    queries: members.map((m) => ({
       queryKey: ['user', m.user_id],
       queryFn: () => authApi.getUser(m.user_id),
       staleTime: 5 * 60_000,
@@ -179,6 +179,8 @@ export function BoardPage() {
       tasksApi.move(id, { to_list_id: toListId, position }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] });
+      // Move sang cột Done có thể thay đổi stat dashboard ("đang làm")
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
     },
   });
 
@@ -426,7 +428,7 @@ export function BoardPage() {
                 const u = userMap.get(m.user_id);
                 return (
                   <option key={m.id} value={m.user_id}>
-                    {u?.full_name ?? u?.username ?? `User #${m.user_id}`}
+                    {u?.full_name ?? u?.username ?? `Người dùng #${m.user_id}`}
                   </option>
                 );
               })}
@@ -488,6 +490,7 @@ export function BoardPage() {
                         list={list}
                         tasks={listTasks}
                         labels={labels}
+                        userMap={userMap}
                         onTaskClick={(t) => setOpenTaskId(t.id)}
                         onAddTask={() => setCreatingInList(list.id)}
                         onDelete={() => deleteColumnMutation.mutate(list.id)}
@@ -550,7 +553,7 @@ export function BoardPage() {
           </div>
 
           <DragOverlay>
-            {activeTask ? <TaskCard task={activeTask} labels={labels} /> : null}
+            {activeTask ? <TaskCard task={activeTask} labels={labels} userMap={userMap} /> : null}
             {activeColumn ? (
               <div className="w-72 bg-gray-100 rounded-xl border border-primary-400 shadow-xl p-3 opacity-90">
                 <div className="text-sm font-semibold text-gray-900">{activeColumn.name}</div>

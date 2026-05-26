@@ -450,7 +450,7 @@ export function SprintDetailPage() {
                   const label =
                     key === 'UNASSIGNED'
                       ? 'Chưa giao'
-                      : (u?.full_name ?? u?.username ?? `User #${key}`);
+                      : (u?.full_name ?? u?.username ?? `Người dùng #${key}`);
                   return (
                     <div key={key} className="flex items-center gap-2">
                       {typeof key === 'number' ? (

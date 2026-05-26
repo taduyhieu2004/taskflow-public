@@ -4,6 +4,7 @@ import { ProtectedRoute, PublicOnlyRoute } from '@/routes/protected-route';
 import { LoginPage } from '@/features/auth/login-page';
 import { RegisterPage } from '@/features/auth/register-page';
 import { ForgotPasswordPage } from '@/features/auth/forgot-password-page';
+import { ResetPasswordPage } from '@/features/auth/reset-password-page';
 import { DashboardPage } from '@/features/projects/dashboard-page';
 import { ProjectsPage } from '@/features/projects/projects-page';
 import { BoardPage } from '@/features/boards/board-page';
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/reset-password', element: <ResetPasswordPage /> },
     ],
   },
   {

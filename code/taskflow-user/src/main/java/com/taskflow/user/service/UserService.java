@@ -19,7 +19,12 @@ public interface UserService {
 
     void changePassword(Long userId, ChangePasswordRequest request);
 
-    String forgotPassword(ForgotPasswordRequest request);  // returns plaintext token (dev)
+    /**
+     * Khởi tạo flow đặt lại mật khẩu: nếu email tồn tại → sinh token, lưu hash,
+     * gửi email cho user. KHÔNG trả token plaintext qua API (chỉ qua email).
+     * Email không tồn tại → vẫn không throw (chống email enumeration).
+     */
+    void forgotPassword(ForgotPasswordRequest request);
 
     void resetPassword(ResetPasswordRequest request);
 

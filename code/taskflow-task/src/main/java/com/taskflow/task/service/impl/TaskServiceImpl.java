@@ -113,6 +113,7 @@ public class TaskServiceImpl implements TaskService {
             publisher.publish(RoutingKeys.TASK_ASSIGNED, callerId,
                     TaskEvents.TaskAssigned.builder()
                             .taskId(t.getId()).projectId(t.getProjectId())
+                            .taskTitle(t.getTitle())
                             .oldAssigneeId(oldAssignee).newAssigneeId(req.getAssigneeId())
                             .build());
         }
@@ -139,6 +140,7 @@ public class TaskServiceImpl implements TaskService {
             publisher.publish(RoutingKeys.TASK_UPDATED, callerId,
                     TaskEvents.TaskUpdated.builder()
                             .taskId(t.getId()).projectId(t.getProjectId())
+                            .taskTitle(t.getTitle())
                             .changes(changes).build());
         }
 
@@ -202,6 +204,13 @@ public class TaskServiceImpl implements TaskService {
             throw new BadRequestException("cannot_move_across_projects");
         }
 
+        // Batch lookup tên cả 2 list để snapshot vào event (giúp Activity Log
+        // render câu thân thiện mà không cần lookup khi đọc).
+        java.util.Map<Long, String> listNames = projectClient.getListNames(
+                java.util.List.of(fromListId, req.getToListId()));
+        String fromName = listNames.get(fromListId);
+        String toName = listNames.getOrDefault(req.getToListId(), info.name());
+
         t.setListId(req.getToListId());
         t.setBoardId(info.boardId());
         t.setPosition(req.getPosition() != null ? req.getPosition() :
@@ -213,7 +222,9 @@ public class TaskServiceImpl implements TaskService {
                 TaskEvents.TaskMoved.builder()
                         .taskId(t.getId()).projectId(t.getProjectId())
                         .boardId(t.getBoardId())
-                        .fromListId(fromListId).toListId(req.getToListId())
+                        .taskTitle(t.getTitle())
+                        .fromListId(fromListId).fromListName(fromName)
+                        .toListId(req.getToListId()).toListName(toName)
                         .newPosition(t.getPosition()).build());
 
         return toResponseWithLabels(t);

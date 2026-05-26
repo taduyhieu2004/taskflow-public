@@ -16,9 +16,11 @@ interface Props {
   task: Task;
   labels: Label[];
   onClick?: () => void;
+  /** Map userId → user info. Truyền từ board-page để hiển thị tên + avatar đúng. */
+  userMap?: Map<number, { full_name?: string | null; username?: string }>;
 }
 
-export function TaskCard({ task, labels, onClick }: Props) {
+export function TaskCard({ task, labels, onClick, userMap }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'Task', task },
@@ -78,9 +80,13 @@ export function TaskCard({ task, labels, onClick }: Props) {
             </span>
           )}
         </div>
-        {task.assignee_id ? (
-          <Avatar seed={task.assignee_id} name={String(task.assignee_id)} size="sm" />
-        ) : (
+        {task.assignee_id ? (() => {
+          const u = userMap?.get(task.assignee_id);
+          const name = u?.full_name ?? u?.username ?? `Người dùng #${task.assignee_id}`;
+          return (
+            <Avatar seed={task.assignee_id} name={name} size="sm" title={name} />
+          );
+        })() : (
           <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[10px]">?</div>
         )}
       </div>

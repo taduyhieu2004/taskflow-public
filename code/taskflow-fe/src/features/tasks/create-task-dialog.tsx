@@ -94,6 +94,7 @@ export function CreateTaskDialog({ listId, boardId, projectId, onClose }: Props)
     mutationFn: tasksApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       onClose();
     },
   });
@@ -177,7 +178,7 @@ export function CreateTaskDialog({ listId, boardId, projectId, onClose }: Props)
                     const u = userMap.get(m.user_id);
                     return (
                       <option key={m.id} value={m.user_id}>
-                        {u?.full_name ?? u?.username ?? `User #${m.user_id}`}
+                        {u?.full_name ?? u?.username ?? `Người dùng #${m.user_id}`}
                       </option>
                     );
                   })}

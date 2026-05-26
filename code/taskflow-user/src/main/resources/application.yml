@@ -32,6 +32,25 @@ spring:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:ncshoadondientu@gmail.com}
+    password: ${MAIL_PASSWORD:nbdl rklu scba ztzo}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            trust: smtp.gmail.com
+
+# URL FE để build link reset trong email
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  mail:
+    from: ${MAIL_FROM:TaskFlow <ncshoadondientu@gmail.com>}
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

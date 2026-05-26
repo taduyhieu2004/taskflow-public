@@ -16,6 +16,7 @@ import com.taskflow.user.entity.User;
 import com.taskflow.user.mapper.UserMapper;
 import com.taskflow.user.repository.PasswordResetRepository;
 import com.taskflow.user.repository.UserRepository;
+import com.taskflow.user.service.EmailService;
 import com.taskflow.user.service.TokenService;
 import com.taskflow.user.service.TokenStore;
 import com.taskflow.user.service.UserService;
@@ -45,6 +46,7 @@ public class UserServiceImpl implements UserService {
     private final TokenService tokenService;
     private final TokenStore tokenStore;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -125,12 +127,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public String forgotPassword(ForgotPasswordRequest request) {
+    public void forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository.findByEmailAndDeletedFalse(request.getEmail()).orElse(null);
         if (user == null) {
-            // Trả về 200 nhưng không sinh token, tránh leak email tồn tại
+            // Không throw — trả về 200 generic ở controller, chống email enumeration.
             log.info("Forgot password requested for non-existent email: {}", request.getEmail());
-            return null;
+            return;
         }
 
         String plainToken = UUID.randomUUID().toString();
@@ -141,8 +143,9 @@ public class UserServiceImpl implements UserService {
         reset.setUsed(false);
         passwordResetRepository.save(reset);
 
-        log.info("Reset password token (DEV) for user {}: {}", user.getId(), plainToken);
-        return plainToken;
+        // Gửi email (async). Token plaintext CHỈ tồn tại trong email — không qua API response, không lưu DB.
+        emailService.sendResetPasswordEmail(user.getEmail(), user.getFullName(), plainToken);
+        log.info("Sent reset password email for user {}", user.getId());
     }
 
     @Override
@@ -165,6 +168,9 @@ public class UserServiceImpl implements UserService {
         passwordResetRepository.save(reset);
 
         tokenStore.revokeAll(user.getId());
+
+        // Email cảnh báo: nếu không phải user đổi, sẽ biết để xử lý sớm.
+        emailService.sendPasswordChangedAlert(user.getEmail(), user.getFullName());
     }
 
     @Override

@@ -121,6 +121,8 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
     onSuccess: (updated) => {
       queryClient.setQueryData(['task', updated.id], updated);
       queryClient.invalidateQueries({ queryKey: ['tasks', 'board', task?.board_id] });
+      // Dashboard / Due-soon page cũng filter theo assignee → invalidate luôn
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
     },
   });
 
@@ -128,6 +130,7 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
     mutationFn: () => tasksApi.remove(task!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'board', task?.board_id] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       onClose();
     },
   });
@@ -307,7 +310,7 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
                         <span className="text-gray-900">
                           {userMap.get(task.assignee_id)?.full_name ??
                             userMap.get(task.assignee_id)?.username ??
-                            `User #${task.assignee_id}`}
+                            `Người dùng #${task.assignee_id}`}
                         </span>
                       </>
                     ) : (
@@ -352,7 +355,7 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
                               size="sm"
                             />
                             <span className="text-xs text-gray-700 flex-1 truncate">
-                              {u?.full_name ?? u?.username ?? `User #${m.user_id}`}
+                              {u?.full_name ?? u?.username ?? `Người dùng #${m.user_id}`}
                             </span>
                             {active && (
                               <span className="text-[10px] text-emerald-600 font-bold">✓</span>
@@ -366,8 +369,27 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
               </Popover>
 
               <RowLabel icon={<UserCog className="w-4 h-4" />}>Reporter</RowLabel>
-              <div className="text-gray-700">
-                {task.reporter_id ? `User #${task.reporter_id}` : '—'}
+              <div className="text-gray-700 flex items-center gap-2">
+                {task.reporter_id ? (
+                  <>
+                    <Avatar
+                      seed={task.reporter_id}
+                      name={
+                        userMap.get(task.reporter_id)?.full_name ??
+                        userMap.get(task.reporter_id)?.username ??
+                        `U${task.reporter_id}`
+                      }
+                      size="sm"
+                    />
+                    <span className="text-gray-900">
+                      {userMap.get(task.reporter_id)?.full_name ??
+                        userMap.get(task.reporter_id)?.username ??
+                        `Người dùng #${task.reporter_id}`}
+                    </span>
+                  </>
+                ) : (
+                  '—'
+                )}
               </div>
 
               <RowLabel icon={<Calendar className="w-4 h-4" />}>Hết hạn</RowLabel>
@@ -532,8 +554,8 @@ export function TaskDetailPanel({ taskId, lists, projectId, projectKey, onClose 
             </div>
 
             <div>
-              {tab === 'comments' && <CommentsSection taskId={task.id} />}
-              {tab === 'attachments' && <AttachmentsSection taskId={task.id} />}
+              {tab === 'comments' && <CommentsSection taskId={task.id} userMap={userMap} />}
+              {tab === 'attachments' && <AttachmentsSection taskId={task.id} userMap={userMap} />}
               {tab === 'activity' && <ActivitySection taskId={task.id} />}
             </div>
           </>

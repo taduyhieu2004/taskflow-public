@@ -11,9 +11,19 @@ import type { Comment } from '@/types/collab';
 
 interface Props {
   taskId: number;
+  /** Map userId → user info (full_name, username). Truyền từ task-detail-panel. */
+  userMap?: Map<number, { full_name?: string | null; username?: string }>;
 }
 
-export function CommentsSection({ taskId }: Props) {
+function displayName(
+  userId: number,
+  userMap?: Map<number, { full_name?: string | null; username?: string }>,
+): string {
+  const u = userMap?.get(userId);
+  return u?.full_name ?? u?.username ?? `Người dùng #${userId}`;
+}
+
+export function CommentsSection({ taskId, userMap }: Props) {
   const queryClient = useQueryClient();
   const me = useAuthStore((s) => s.user);
   const [draft, setDraft] = useState('');
@@ -45,7 +55,15 @@ export function CommentsSection({ taskId }: Props) {
         ) : comments.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">Chưa có bình luận nào.</p>
         ) : (
-          comments.map((c) => <CommentItem key={c.id} comment={c} taskId={taskId} canEdit={c.author_id === me?.id} />)
+          comments.map((c) => (
+            <CommentItem
+              key={c.id}
+              comment={c}
+              taskId={taskId}
+              canEdit={c.author_id === me?.id}
+              userMap={userMap}
+            />
+          ))
         )}
       </div>
 
@@ -88,7 +106,18 @@ export function CommentsSection({ taskId }: Props) {
   );
 }
 
-function CommentItem({ comment, taskId, canEdit }: { comment: Comment; taskId: number; canEdit: boolean }) {
+function CommentItem({
+  comment,
+  taskId,
+  canEdit,
+  userMap,
+}: {
+  comment: Comment;
+  taskId: number;
+  canEdit: boolean;
+  userMap?: Map<number, { full_name?: string | null; username?: string }>;
+}) {
+  const author = displayName(comment.author_id, userMap);
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.content);
@@ -108,11 +137,11 @@ function CommentItem({ comment, taskId, canEdit }: { comment: Comment; taskId: n
 
   return (
     <div className="flex gap-3">
-      <Avatar seed={comment.author_id} name={`U${comment.author_id}`} size="md" />
+      <Avatar seed={comment.author_id} name={author} size="md" />
       <div className="flex-1 min-w-0">
         <div className="bg-white rounded-lg p-3 border border-gray-200">
           <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-gray-900">User #{comment.author_id}</span>
+            <span className="font-semibold text-gray-900">{author}</span>
             <span className="text-gray-400">{formatRelativeTime(comment.created_at)}</span>
             {comment.last_updated_at > comment.created_at + 1000 && (
               <>

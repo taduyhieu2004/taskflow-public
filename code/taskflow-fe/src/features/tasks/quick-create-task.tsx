@@ -23,6 +23,7 @@ export function QuickCreateTask({ listId, boardId, onClose }: Props) {
     mutationFn: tasksApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       setTitle('');
       onClose();
     },

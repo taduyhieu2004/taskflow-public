@@ -117,7 +117,7 @@ export function MembersPage() {
                 <Avatar name={u?.full_name ?? u?.username ?? `U${m.user_id}`} seed={m.user_id} size="lg" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-gray-900">
-                    {u?.full_name ?? u?.username ?? `User #${m.user_id}`}
+                    {u?.full_name ?? u?.username ?? `Người dùng #${m.user_id}`}
                     {isSelf && <span className="text-xs text-gray-400 ml-2">(bạn)</span>}
                   </div>
                   <div className="text-xs text-gray-500 truncate">

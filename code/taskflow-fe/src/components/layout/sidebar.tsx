@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
 import { ProfileDialog } from '@/features/auth/profile-dialog';
+import { useLogout } from '@/features/auth/use-logout';
 import { CreateProjectDialog } from '@/features/projects/create-project-dialog';
 import { projectsApi } from '@/features/projects/projects-api';
 import { resolveAvatarUrl } from '@/lib/api';
@@ -11,7 +12,8 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function Sidebar() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useLogout();
   const [createOpen, setCreateOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 

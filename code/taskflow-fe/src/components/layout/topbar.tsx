@@ -4,13 +4,14 @@ import { Link } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ProfileDialog } from '@/features/auth/profile-dialog';
+import { useLogout } from '@/features/auth/use-logout';
 import { NotificationsDropdown } from '@/features/notifications/notifications-dropdown';
 import { resolveAvatarUrl } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function Topbar() {
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const logout = useLogout();
   const [profileOpen, setProfileOpen] = useState(false);
 
   return (

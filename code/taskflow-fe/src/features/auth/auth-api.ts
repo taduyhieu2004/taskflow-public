@@ -16,8 +16,10 @@ export const authApi = {
   register: (req: RegisterRequest) =>
     api.post<ApiResponse<User>>('/auth/register', req).then(unwrap),
 
+  // BE chỉ trả message generic ("Nếu email tồn tại, link đã được gửi").
+  // Token đặt lại được gửi qua EMAIL — không qua API response.
   forgotPassword: (req: ForgotPasswordRequest) =>
-    api.post<ApiResponse<{ reset_token?: string }>>('/auth/forgot-password', req).then(unwrap),
+    api.post<ApiResponse<void>>('/auth/forgot-password', req).then(unwrap),
 
   resetPassword: (req: ResetPasswordRequest) =>
     api.post<ApiResponse<void>>('/auth/reset-password', req).then(unwrap),

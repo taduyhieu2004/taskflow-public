@@ -11,7 +11,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @Component
@@ -20,7 +24,7 @@ public class ProjectServiceClient {
 
     private final WebClient.Builder webClientBuilder;
 
-    public record ListBoardInfo(Long boardId, Long projectId) {}
+    public record ListBoardInfo(Long boardId, Long projectId, String name) {}
 
     @CircuitBreaker(name = "project-service", fallbackMethod = "getRoleFallback")
     public String getRole(Long projectId, Long userId) {
@@ -54,16 +58,44 @@ public class ProjectServiceClient {
                     .block();
             if (resp == null || resp.getData() == null) return null;
             Map<String, Object> d = resp.getData();
+            Object name = d.get("name");
             return new ListBoardInfo(
                     Long.valueOf(d.get("board_id").toString()),
-                    Long.valueOf(d.get("project_id").toString()));
+                    Long.valueOf(d.get("project_id").toString()),
+                    name == null ? null : name.toString());
         } catch (WebClientResponseException.NotFound nf) {
             return null;
         }
     }
 
+    @SuppressWarnings("unused")
     public ListBoardInfo getListBoardFallback(Long listId, Throwable ex) {
         log.warn("ProjectService unavailable when getListBoard({}): {}", listId, ex.getMessage());
         throw new BadRequestException("project_service_unavailable");
+    }
+
+    /**
+     * Batch lookup tên list. Trả empty map khi service down (caller xử lý fallback).
+     */
+    @CircuitBreaker(name = "project-service", fallbackMethod = "getListNamesFallback")
+    public Map<Long, String> getListNames(Collection<Long> listIds) {
+        if (listIds == null || listIds.isEmpty()) return Collections.emptyMap();
+        List<Long> ids = listIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return Collections.emptyMap();
+        ApiResponse<Map<Long, String>> resp = webClientBuilder.build()
+                .post()
+                .uri("http://taskflow-project/internal/lists/names")
+                .bodyValue(ids)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<ApiResponse<Map<Long, String>>>() {})
+                .timeout(Duration.ofSeconds(2))
+                .block();
+        return resp == null || resp.getData() == null ? Collections.emptyMap() : resp.getData();
+    }
+
+    @SuppressWarnings("unused")
+    public Map<Long, String> getListNamesFallback(Collection<Long> listIds, Throwable ex) {
+        log.warn("ProjectService unavailable when getListNames: {}", ex.getMessage());
+        return Collections.emptyMap();
     }
 }

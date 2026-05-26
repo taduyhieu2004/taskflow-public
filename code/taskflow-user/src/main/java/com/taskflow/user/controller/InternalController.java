@@ -7,6 +7,7 @@ import com.taskflow.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,8 +30,25 @@ public class InternalController {
                 .filter(u -> Boolean.FALSE.equals(u.getDeleted()))
                 .map(u -> u.getId())
                 .toList();
-        var result = new java.util.LinkedHashMap<Long, Boolean>();
+        var result = new LinkedHashMap<Long, Boolean>();
         for (Long id : userIds) result.put(id, existing.contains(id));
         return ApiResponse.ok(result);
     }
+
+    /**
+     * Batch lookup tên hiển thị cho nhiều userId cùng lúc.
+     * Trả map userId → {username, fullName}. ID không tồn tại bị bỏ qua.
+     * Dùng cho Collab render Activity Log, Notification render @mention, …
+     */
+    @PostMapping("/names")
+    public ApiResponse<Map<Long, NameEntry>> names(@RequestBody List<Long> userIds) {
+        Map<Long, NameEntry> result = new LinkedHashMap<>();
+        userRepository.findAllById(userIds).stream()
+                .filter(u -> Boolean.FALSE.equals(u.getDeleted()))
+                .forEach(u -> result.put(u.getId(),
+                        new NameEntry(u.getUsername(), u.getFullName())));
+        return ApiResponse.ok(result);
+    }
+
+    public record NameEntry(String username, String fullName) {}
 }

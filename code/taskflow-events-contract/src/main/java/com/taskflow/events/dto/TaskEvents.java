@@ -39,6 +39,7 @@ public final class TaskEvents {
     public static class TaskUpdated {
         private Long taskId;
         private Long projectId;
+        private String taskTitle;
         // field name -> {"from": <old>, "to": <new>}
         private Map<String, FieldChange> changes;
 
@@ -62,8 +63,11 @@ public final class TaskEvents {
         private Long taskId;
         private Long projectId;
         private Long boardId;
+        private String taskTitle;
         private Long fromListId;
+        private String fromListName;
         private Long toListId;
+        private String toListName;
         private Integer newPosition;
     }
 
@@ -75,6 +79,7 @@ public final class TaskEvents {
     public static class TaskAssigned {
         private Long taskId;
         private Long projectId;
+        private String taskTitle;
         private Long oldAssigneeId;
         private Long newAssigneeId;
     }
@@ -101,6 +106,7 @@ public final class TaskEvents {
     public static class TaskDueSoon {
         private Long taskId;
         private Long projectId;
+        private String taskTitle;
         private Long assigneeId;
         private Long dueDate;
         private Integer hoursRemaining;
@@ -114,6 +120,7 @@ public final class TaskEvents {
     public static class TaskOverdue {
         private Long taskId;
         private Long projectId;
+        private String taskTitle;
         private Long assigneeId;
         private Long dueDate;
     }
@@ -126,6 +133,7 @@ public final class TaskEvents {
     public static class DependencyChanged {
         private Long taskId;
         private Long projectId;
+        private String taskTitle;
         private List<DependencyRef> added;
         private List<DependencyRef> removed;
 

@@ -41,9 +41,10 @@ interface Props {
   onTaskClick?: (task: Task) => void;
   onAddTask?: () => void;
   onDelete?: () => void;
+  userMap?: Map<number, { full_name?: string | null; username?: string }>;
 }
 
-export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask, onDelete }: Props) {
+export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask, onDelete, userMap }: Props) {
   const {
     setNodeRef: setSortableRef,
     attributes,
@@ -154,7 +155,7 @@ export function BoardColumn({ list, tasks, labels, onTaskClick, onAddTask, onDel
           >
             <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
               {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} labels={labels} onClick={() => onTaskClick?.(task)} />
+                <TaskCard key={task.id} task={task} labels={labels} userMap={userMap} onClick={() => onTaskClick?.(task)} />
               ))}
             </SortableContext>
             {tasks.length === 0 && (

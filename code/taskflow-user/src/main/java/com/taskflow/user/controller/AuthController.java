@@ -10,7 +10,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -47,11 +46,13 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ApiResponse<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        String token = userService.forgotPassword(request);
-        // DEV mode: trả token trực tiếp; PROD sẽ gửi qua Notification Service
-        return ApiResponse.ok("If account exists, reset instructions were sent",
-                token == null ? null : Map.of("dev_reset_token", token));
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        // Luôn trả message generic — không tiết lộ email có tồn tại hay không.
+        // Token plaintext chỉ tới user qua email (xem EmailService).
+        userService.forgotPassword(request);
+        return ApiResponse.ok(
+                "Nếu email tồn tại trong hệ thống, link đặt lại mật khẩu đã được gửi.",
+                null);
     }
 
     @PostMapping("/reset-password")

@@ -6,12 +6,14 @@ import com.taskflow.common.dto.ApiResponse;
 import com.taskflow.common.security.SecurityHeaderUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -36,9 +38,14 @@ public class AttachmentController {
     @GetMapping("/api/v1/attachments/{id}/download")
     public ResponseEntity<InputStreamResource> download(@PathVariable Long id) {
         AttachmentService.DownloadResult r = service.download(SecurityHeaderUtils.currentUserId(), id);
+        // Spring sẽ tự encode filename UTF-8 theo RFC 5987 (filename*=UTF-8'')
+        // và fallback ASCII (filename="...") để tương thích browser cũ. Nếu tự ghép
+        // tay với ký tự non-ASCII (vd "Đồ án.docx"), Spring sẽ drop header.
+        ContentDisposition cd = ContentDisposition.attachment()
+                .filename(r.fileName(), StandardCharsets.UTF_8)
+                .build();
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + r.fileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, cd.toString())
                 .contentType(r.mimeType() == null ? MediaType.APPLICATION_OCTET_STREAM
                                                   : MediaType.parseMediaType(r.mimeType()))
                 .contentLength(r.sizeBytes())

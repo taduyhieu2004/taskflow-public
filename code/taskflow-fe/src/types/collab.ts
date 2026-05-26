@@ -28,6 +28,10 @@ export interface ActivityLog {
   target_id: number;
   action: string;
   actor_id: number;
+  /** Tên hiển thị của actor (resolved từ User Service); null nếu hệ thống. */
+  actor_name?: string | null;
+  /** Câu mô tả tiếng Việt thân thiện, sẵn sàng hiển thị. */
+  message?: string | null;
   payload?: Record<string, unknown> | null;
   occurred_at: number;
 }

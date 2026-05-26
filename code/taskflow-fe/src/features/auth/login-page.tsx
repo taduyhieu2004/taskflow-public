@@ -13,8 +13,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const setSession = useAuthStore((s) => s.setSession);
-  const [username, setUsername] = useState('alice');
-  const [password, setPassword] = useState('secret123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
 
   const loginMutation = useMutation({
@@ -89,6 +89,7 @@ export function LoginPage() {
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Nhập tên đăng nhập"
                   className="pl-10"
                   required
                   autoComplete="username"
@@ -114,6 +115,7 @@ export function LoginPage() {
                   type={showPwd ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Nhập mật khẩu"
                   className="pl-10 pr-10"
                   required
                   autoComplete="current-password"

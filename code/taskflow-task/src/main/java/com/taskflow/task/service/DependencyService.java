@@ -61,6 +61,7 @@ public class DependencyService {
         publisher.publish(RoutingKeys.TASK_DEPENDENCY_CHANGED, callerId,
                 TaskEvents.DependencyChanged.builder()
                         .taskId(taskId).projectId(t.getProjectId())
+                        .taskTitle(t.getTitle())
                         .added(List.of(TaskEvents.DependencyChanged.DependencyRef.builder()
                                 .dependsOnTaskId(d.getDependsOnTaskId()).type(d.getType().name()).build()))
                         .removed(List.of()).build());
@@ -82,6 +83,7 @@ public class DependencyService {
         publisher.publish(RoutingKeys.TASK_DEPENDENCY_CHANGED, callerId,
                 TaskEvents.DependencyChanged.builder()
                         .taskId(taskId).projectId(t.getProjectId())
+                        .taskTitle(t.getTitle())
                         .added(List.of())
                         .removed(List.of(TaskEvents.DependencyChanged.DependencyRef.builder()
                                 .dependsOnTaskId(d.getDependsOnTaskId()).type(d.getType().name()).build()))

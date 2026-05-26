@@ -49,6 +49,7 @@ export function RegisterPage() {
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              placeholder="Nhập tên đăng nhập (tối thiểu 3 ký tự)"
               className="pl-10"
               required
               minLength={3}
@@ -62,6 +63,7 @@ export function RegisterPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="Nhập địa chỉ email"
               className="pl-10"
               required
               autoComplete="email"
@@ -73,6 +75,7 @@ export function RegisterPage() {
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              placeholder="Nhập họ và tên hiển thị"
               className="pl-10"
               autoComplete="name"
             />
@@ -84,6 +87,7 @@ export function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
               className="pl-10"
               required
               minLength={6}

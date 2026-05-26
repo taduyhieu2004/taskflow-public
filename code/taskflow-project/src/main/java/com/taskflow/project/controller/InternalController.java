@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -41,14 +43,29 @@ public class InternalController {
     }
 
     @GetMapping("/lists/{id}/board")
-    public ApiResponse<Map<String, Long>> listBoard(@PathVariable Long id) {
+    public ApiResponse<Map<String, Object>> listBoard(@PathVariable Long id) {
         BoardList l = listRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> NotFoundException.of("List", id));
         Board b = boardRepository.findByIdAndDeletedFalse(l.getBoardId())
                 .orElseThrow(() -> NotFoundException.of("Board", l.getBoardId()));
-        return ApiResponse.ok(Map.of(
-                "list_id", id,
-                "board_id", b.getId(),
-                "project_id", b.getProjectId()));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("list_id", id);
+        body.put("board_id", b.getId());
+        body.put("project_id", b.getProjectId());
+        body.put("name", l.getName());
+        return ApiResponse.ok(body);
+    }
+
+    /**
+     * Batch lookup tên cột Kanban (list) theo nhiều listId. Dùng để snapshot
+     * tên list vào event task.moved phục vụ Activity Log render câu thân thiện.
+     */
+    @PostMapping("/lists/names")
+    public ApiResponse<Map<Long, String>> listNames(@RequestBody List<Long> listIds) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        listRepository.findAllById(listIds).stream()
+                .filter(l -> Boolean.FALSE.equals(l.getDeleted()))
+                .forEach(l -> result.put(l.getId(), l.getName()));
+        return ApiResponse.ok(result);
     }
 }

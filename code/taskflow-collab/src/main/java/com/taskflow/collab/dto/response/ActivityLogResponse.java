@@ -22,6 +22,15 @@ public class ActivityLogResponse {
     private Long targetId;
     private String action;
     private Long actorId;
+
+    /** Tên hiển thị của actor (resolved qua User Service); null nếu actor là hệ thống. */
+    private String actorName;
+
+    /** Câu mô tả tiếng Việt thân thiện, dành cho UI hiển thị trực tiếp. */
+    private String message;
+
+    /** Payload gốc của event, vẫn giữ để FE có thể tự render lại nếu cần. */
     private Map<String, Object> payload;
+
     private Long occurredAt;
 }
