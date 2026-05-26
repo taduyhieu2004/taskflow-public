@@ -343,10 +343,6 @@ docker compose exec postgres psql -U postgres -d taskflow_user
 
 http://localhost:15672 (guest/guest) → Exchanges → `taskflow.events` → xem stats event đi qua.
 
-### 5.5 Swagger tổng hợp
-
-Không có vì mỗi service tự host. Nếu muốn ghép vào 1 trang dùng `springdoc.swagger-ui.urls` ở Gateway — chưa setup.
-
 ---
 
 ## 6. Troubleshooting
@@ -366,15 +362,3 @@ Không có vì mỗi service tự host. Nếu muốn ghép vào 1 trang dùng `s
 
 ---
 
-## 7. Phase đã hoàn thành
-
-| Phase | Hạng mục | Trạng thái |
-|---|---|---|
-| 0 | Foundation (events-contract, common, Eureka, Config, Gateway skeleton) | ✅ |
-| 1 | User Service + JWT filter Gateway | ✅ |
-| 2 | Project Service (Project/Board/List/Sprint/Member + saga default board) | ✅ |
-| 3 | Task Service (CRUD + move + filter + label + checklist + watcher + cleanup consumer) | ✅ |
-| 4 | Collaboration Service (Comment + Attachment MinIO + Activity Log + cleanup consumer) | ✅ |
-| 5 | Notification Service (REST + WebSocket STOMP + event consumer + board broadcast) | ✅ |
-| 6 | Polish (Postman, README per service) | 🔄 partial |
-| 7 | Frontend React (Vite + TS + shadcn + dnd-kit + STOMP) | ✅ |
