@@ -1,0 +1,288 @@
+# TaskFlow — full stack docker-compose
+# Chạy:   docker compose up -d --build
+# Tắt:    docker compose down              (giữ volume)
+# Reset:  docker compose down -v           (xoá hết DB/MinIO/RabbitMQ)
+#
+# Cấu hình: chỉnh giá trị trong file .env (copy từ .env.example).
+
+networks:
+  taskflow:
+    driver: bridge
+
+volumes:
+  pg_data:
+  minio_data:
+  rabbitmq_data:
+
+# Biến reusable
+x-spring-common-env: &spring-common-env
+  EUREKA_URL: http://eureka:8761/eureka/
+  CONFIG_URI: http://config:8888
+  POSTGRES_USERNAME: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USERNAME: ${RABBITMQ_USER}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  JWT_RESET_SECRET: ${JWT_RESET_SECRET}
+
+x-minio-env: &minio-env
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+x-healthcheck-default: &healthcheck-default
+  interval: 10s
+  timeout: 5s
+  retries: 20
+
+services:
+
+  # ───────────────────── Hạ tầng ─────────────────────
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: taskflow-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${POSTGRES_HOST_PORT}:5432"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow-redis
+    ports:
+      - "${REDIS_HOST_PORT}:6379"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: taskflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_HOST_PORT}:5672"
+      - "${RABBITMQ_MGMT_PORT}:15672"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      <<: *healthcheck-default
+
+  minio:
+    image: minio/minio:latest
+    container_name: taskflow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_HOST_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      <<: *healthcheck-default
+
+  # ───────────────────── Spring services ─────────────────────
+
+  eureka:
+    build:
+      context: ./code
+      dockerfile: taskflow-eureka/Dockerfile
+    container_name: taskflow-eureka
+    ports:
+      - "${EUREKA_HOST_PORT}:8761"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8761/actuator/health"]
+      <<: *healthcheck-default
+
+  config:
+    build:
+      context: ./code
+      dockerfile: taskflow-config/Dockerfile
+    container_name: taskflow-config
+    environment:
+      EUREKA_URL: http://eureka:8761/eureka/
+      CONFIG_REPO_PATH: file:/app/config-repo
+    depends_on:
+      eureka: { condition: service_healthy }
+    ports:
+      - "${CONFIG_HOST_PORT}:8888"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8888/actuator/health"]
+      <<: *healthcheck-default
+
+  user-service:
+    build:
+      context: ./code
+      dockerfile: taskflow-user/Dockerfile
+    container_name: taskflow-user
+    environment:
+      <<: [*spring-common-env, *minio-env]
+      SERVER_PORT: 8081
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/taskflow_user
+      MINIO_AVATAR_BUCKET: ${MINIO_AVATAR_BUCKET}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      <<: *healthcheck-default
+
+  project-service:
+    build:
+      context: ./code
+      dockerfile: taskflow-project/Dockerfile
+    container_name: taskflow-project
+    environment:
+      <<: *spring-common-env
+      SERVER_PORT: 8082
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/taskflow_project
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+      user-service: { condition: service_healthy }
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      <<: *healthcheck-default
+
+  task-service:
+    build:
+      context: ./code
+      dockerfile: taskflow-task/Dockerfile
+    container_name: taskflow-task
+    environment:
+      <<: *spring-common-env
+      SERVER_PORT: 8083
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/taskflow_task
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+      project-service: { condition: service_healthy }
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health"]
+      <<: *healthcheck-default
+
+  collab-service:
+    build:
+      context: ./code
+      dockerfile: taskflow-collab/Dockerfile
+    container_name: taskflow-collab
+    environment:
+      <<: [*spring-common-env, *minio-env]
+      SERVER_PORT: 8084
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/taskflow_collab
+      MINIO_BUCKET: ${MINIO_ATTACHMENT_BUCKET}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+      task-service: { condition: service_healthy }
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      <<: *healthcheck-default
+
+  notification-service:
+    build:
+      context: ./code
+      dockerfile: taskflow-notification/Dockerfile
+    container_name: taskflow-notification
+    environment:
+      <<: *spring-common-env
+      SERVER_PORT: 8085
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/taskflow_notif
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+      collab-service: { condition: service_healthy }
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8085/actuator/health"]
+      <<: *healthcheck-default
+
+  gateway:
+    build:
+      context: ./code
+      dockerfile: taskflow-gateway/Dockerfile
+    container_name: taskflow-gateway
+    environment:
+      SERVER_PORT: 8080
+      EUREKA_URL: http://eureka:8761/eureka/
+      CONFIG_URI: http://config:8888
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+    depends_on:
+      eureka: { condition: service_healthy }
+      config: { condition: service_healthy }
+      user-service: { condition: service_healthy }
+      project-service: { condition: service_healthy }
+      task-service: { condition: service_healthy }
+      collab-service: { condition: service_healthy }
+      notification-service: { condition: service_healthy }
+    ports:
+      - "${GATEWAY_HOST_PORT}:8080"
+    networks: [taskflow]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      <<: *healthcheck-default
+
+  # ───────────────────── Frontend ─────────────────────
+
+  fe:
+    build:
+      context: ./code/taskflow-fe
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL}
+        VITE_WS_URL: ${PUBLIC_WS_URL}
+    container_name: taskflow-fe
+    depends_on:
+      gateway: { condition: service_healthy }
+    ports:
+      - "${FE_HOST_PORT}:80"
+    networks: [taskflow]

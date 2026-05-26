@@ -31,7 +31,7 @@ public class MemberController {
                 memberService.add(SecurityHeaderUtils.currentUserId(), projectId, req.getUserId(), req.getRole()));
     }
 
-    @PatchMapping("/{userId}/role")
+    @PutMapping("/{userId}/role")
     public ApiResponse<MemberResponse> changeRole(@PathVariable Long projectId,
                                                   @PathVariable Long userId,
                                                   @Valid @RequestBody ChangeRoleRequest req) {

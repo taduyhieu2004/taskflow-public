@@ -20,4 +20,8 @@ public class SprintResponse {
     private Long startDate;
     private Long endDate;
     private String status;
+    private Long closedAt;
+    private Integer closedTotalTasks;
+    private Integer closedDoneTasks;
+    private Integer closedOverdueTasks;
 }

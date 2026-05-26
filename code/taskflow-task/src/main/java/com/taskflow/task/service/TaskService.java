@@ -15,6 +15,6 @@ public interface TaskService {
     TaskResponse restore(Long callerId, Long taskId);
     TaskResponse move(Long callerId, Long taskId, MoveTaskRequest req);
     PageResponse<TaskResponse> filter(Long callerId, Long projectId, Long boardId, Long listId,
-                                      Long assigneeId, Priority priority, String q,
+                                      Long sprintId, Long assigneeId, Priority priority, String q,
                                       int page, int size);
 }

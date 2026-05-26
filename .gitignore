@@ -57,3 +57,8 @@ dist-ssr/
 # Temp
 /tmp/
 *.tmp
+
+# Environment
+.env
+.env.local
+

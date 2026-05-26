@@ -60,12 +60,13 @@ public class TaskController {
             @RequestParam(value = "project_id", required = false) Long projectId,
             @RequestParam(value = "board_id", required = false) Long boardId,
             @RequestParam(value = "list_id", required = false) Long listId,
+            @RequestParam(value = "sprint_id", required = false) Long sprintId,
             @RequestParam(value = "assignee_id", required = false) Long assigneeId,
             @RequestParam(required = false) Priority priority,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(taskService.filter(SecurityHeaderUtils.currentUserId(),
-                projectId, boardId, listId, assigneeId, priority, q, page, size));
+                projectId, boardId, listId, sprintId, assigneeId, priority, q, page, size));
     }
 }

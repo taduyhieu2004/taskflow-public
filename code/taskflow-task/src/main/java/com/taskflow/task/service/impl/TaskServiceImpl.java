@@ -17,6 +17,7 @@ import com.taskflow.task.mapper.TaskMapper;
 import com.taskflow.task.messaging.TaskEventPublisher;
 import com.taskflow.task.repository.TaskLabelMappingRepository;
 import com.taskflow.task.repository.TaskRepository;
+import com.taskflow.task.repository.TaskWatcherRepository;
 import com.taskflow.task.service.AuthorizationService;
 import com.taskflow.task.service.TaskService;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final TaskLabelMappingRepository labelMappingRepository;
+    private final TaskWatcherRepository watcherRepository;
     private final TaskMapper mapper;
     private final TaskEventPublisher publisher;
     private final AuthorizationService authz;
@@ -148,12 +150,24 @@ public class TaskServiceImpl implements TaskService {
     public void delete(Long callerId, Long taskId) {
         Task t = loadTask(taskId);
         authz.requireRole(t.getProjectId(), callerId, "EDITOR");
+
+        // Snapshot info trước khi soft-delete để event mang đủ context cho noti
+        java.util.List<Long> watcherIds = watcherRepository.findByTaskId(taskId).stream()
+                .map(com.taskflow.task.entity.TaskWatcher::getUserId)
+                .toList();
+
         t.setDeleted(true);
         taskRepository.save(t);
 
         publisher.publish(RoutingKeys.TASK_DELETED, callerId,
                 TaskEvents.TaskDeleted.builder()
-                        .taskId(t.getId()).projectId(t.getProjectId()).build());
+                        .taskId(t.getId())
+                        .projectId(t.getProjectId())
+                        .boardId(t.getBoardId())
+                        .title(t.getTitle())
+                        .assigneeId(t.getAssigneeId())
+                        .watcherIds(watcherIds)
+                        .build());
     }
 
     @Override
@@ -207,7 +221,7 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public PageResponse<TaskResponse> filter(Long callerId, Long projectId, Long boardId, Long listId,
-                                             Long assigneeId, Priority priority, String q,
+                                             Long sprintId, Long assigneeId, Priority priority, String q,
                                              int page, int size) {
         // If projectId provided → check member.
         // Otherwise filter to projects user is member of via assignee=callerId trick.
@@ -218,7 +232,7 @@ public class TaskServiceImpl implements TaskService {
             throw new BadRequestException("project_id_or_assignee_id_required");
         }
 
-        Page<Task> result = taskRepository.filter(projectId, boardId, listId, assigneeId, priority,
+        Page<Task> result = taskRepository.filter(projectId, boardId, listId, sprintId, assigneeId, priority,
                 q == null ? "" : q,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "position")));
         return PageResponse.of(result.map(this::toResponseWithLabels));

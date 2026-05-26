@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="add-sprint-snapshot-columns" author="taskflow">
+        <addColumn tableName="sprints">
+            <column name="closed_at" type="bigint"/>
+            <column name="closed_total_tasks" type="int"/>
+            <column name="closed_done_tasks" type="int"/>
+            <column name="closed_overdue_tasks" type="int"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

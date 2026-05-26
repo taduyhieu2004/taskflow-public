@@ -30,4 +30,16 @@ public class Sprint extends AuditEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SprintStatus status = SprintStatus.PLANNING;
+
+    @Column(name = "closed_at")
+    private Long closedAt;
+
+    @Column(name = "closed_total_tasks")
+    private Integer closedTotalTasks;
+
+    @Column(name = "closed_done_tasks")
+    private Integer closedDoneTasks;
+
+    @Column(name = "closed_overdue_tasks")
+    private Integer closedOverdueTasks;
 }

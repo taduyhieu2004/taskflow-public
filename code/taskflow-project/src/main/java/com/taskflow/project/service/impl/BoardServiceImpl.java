@@ -103,11 +103,25 @@ public class BoardServiceImpl implements BoardService {
         Board b = loadBoard(boardId);
         authz.requireRole(b.getProjectId(), callerId, Role.EDITOR);
 
+        List<BoardList> existing = listRepository.findByBoardIdAndDeletedFalseOrderByPositionAsc(boardId);
+        int targetPos;
+        if (req.getPosition() == null || req.getPosition() < 0 || req.getPosition() >= existing.size()) {
+            targetPos = existing.size();
+        } else {
+            targetPos = req.getPosition();
+            for (BoardList existingList : existing) {
+                if (existingList.getPosition() >= targetPos) {
+                    existingList.setPosition(existingList.getPosition() + 1);
+                    listRepository.save(existingList);
+                }
+            }
+        }
+
         BoardList l = new BoardList();
         l.setBoardId(boardId);
         l.setName(req.getName());
         l.setDescription(req.getDescription());
-        l.setPosition(listRepository.findByBoardIdAndDeletedFalseOrderByPositionAsc(boardId).size());
+        l.setPosition(targetPos);
         l = listRepository.save(l);
 
         publisher.publish(RoutingKeys.LIST_CREATED, callerId,

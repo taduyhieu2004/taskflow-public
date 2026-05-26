@@ -14,4 +14,6 @@ public class ListRequest {
 
     @Size(max = 2000)
     private String description;
+
+    private Integer position;
 }

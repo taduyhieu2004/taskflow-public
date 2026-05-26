@@ -9,5 +9,6 @@
     <include file="db/changelog/20260504-1110-boards.xml"/>
     <include file="db/changelog/20260504-1115-lists.xml"/>
     <include file="db/changelog/20260504-1120-sprints.xml"/>
+    <include file="db/changelog/20260525-1000-sprints-snapshot.xml"/>
 
 </databaseChangeLog>

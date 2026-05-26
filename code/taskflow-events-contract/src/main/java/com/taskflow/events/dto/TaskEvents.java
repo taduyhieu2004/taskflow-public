@@ -87,6 +87,10 @@ public final class TaskEvents {
     public static class TaskDeleted {
         private Long taskId;
         private Long projectId;
+        private Long boardId;
+        private String title;
+        private Long assigneeId;
+        private java.util.List<Long> watcherIds;
     }
 
     @Data

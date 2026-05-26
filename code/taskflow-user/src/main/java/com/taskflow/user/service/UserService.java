@@ -27,6 +27,8 @@ public interface UserService {
 
     UserResponse updateProfile(Long userId, UpdateProfileRequest request);
 
+    UserResponse updateAvatar(Long userId, String storageKey);
+
     PageResponse<UserResponse> search(String q, int page, int size);
 
     UserContactResponse getContact(Long id);

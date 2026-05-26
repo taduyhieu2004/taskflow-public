@@ -11,8 +11,10 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -51,11 +53,12 @@ public class EventConsumer {
         // Notify assignee nếu có
         Long assigneeId = num(data.get("assignee_id"));
         Long taskId = num(data.get("task_id"));
+        Long projectId = num(data.get("project_id"));
         if (assigneeId != null && taskId != null) {
             notificationService.create(assigneeId, "TASK_ASSIGNED",
-                    "You were assigned to a task",
-                    "Task: " + data.get("title"),
-                    "/projects/" + data.get("project_id") + "/boards/" + boardId + "/tasks/" + taskId,
+                    "Bạn được giao task mới",
+                    String.valueOf(data.getOrDefault("title", "Task #" + taskId)),
+                    taskLink(projectId, taskId),
                     data);
         }
     }
@@ -66,9 +69,9 @@ public class EventConsumer {
         Long projectId = num(data.get("project_id"));
         if (newAssignee != null && !newAssignee.equals(actorId)) {
             notificationService.create(newAssignee, "TASK_ASSIGNED",
-                    "You were assigned to a task",
-                    "Task #" + taskId,
-                    "/projects/" + projectId + "/tasks/" + taskId,
+                    "Bạn được giao task",
+                    String.valueOf(data.getOrDefault("title", "Task #" + taskId)),
+                    taskLink(projectId, taskId),
                     data);
         }
     }
@@ -83,11 +86,13 @@ public class EventConsumer {
     private void handleTaskDueSoon(Map<String, Object> data) {
         Long assigneeId = num(data.get("assignee_id"));
         Long taskId = num(data.get("task_id"));
+        Long projectId = num(data.get("project_id"));
         if (assigneeId != null && taskId != null) {
+            String title = String.valueOf(data.getOrDefault("title", "Task #" + taskId));
             notificationService.create(assigneeId, "TASK_DUE_SOON",
-                    "Task due soon",
-                    "Task #" + taskId + " is due in " + data.get("hours_remaining") + "h",
-                    "/projects/" + data.get("project_id") + "/tasks/" + taskId,
+                    "Task sắp đến hạn",
+                    title + " còn " + data.get("hours_remaining") + " giờ.",
+                    taskLink(projectId, taskId),
                     data);
         }
     }
@@ -95,19 +100,55 @@ public class EventConsumer {
     private void handleTaskOverdue(Map<String, Object> data) {
         Long assigneeId = num(data.get("assignee_id"));
         Long taskId = num(data.get("task_id"));
+        Long projectId = num(data.get("project_id"));
         if (assigneeId != null && taskId != null) {
+            String title = String.valueOf(data.getOrDefault("title", "Task #" + taskId));
             notificationService.create(assigneeId, "TASK_OVERDUE",
-                    "Task overdue",
-                    "Task #" + taskId + " is overdue",
-                    "/projects/" + data.get("project_id") + "/tasks/" + taskId,
+                    "Task quá hạn",
+                    title + " đã quá hạn.",
+                    taskLink(projectId, taskId),
                     data);
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void handleTaskDeleted(Map<String, Object> data, Long actorId) {
         Long boardId = inferBoardFromData(data);
         if (boardId != null) {
             realtime.broadcastBoardUpdate(boardId, "task.deleted", data);
+        }
+
+        Long taskId = num(data.get("task_id"));
+        Long projectId = num(data.get("project_id"));
+        String title = String.valueOf(data.getOrDefault("title", taskId == null ? "" : "Task #" + taskId));
+
+        // Dedup: 1 user chỉ nhận tối đa 1 noti (assignee ưu tiên)
+        Set<Long> notified = new HashSet<>();
+
+        Long assigneeId = num(data.get("assignee_id"));
+        if (assigneeId != null && !assigneeId.equals(actorId)) {
+            notificationService.create(assigneeId, "TASK_DELETED",
+                    "Task của bạn vừa bị xoá",
+                    title,
+                    "/projects/" + projectId,
+                    data);
+            notified.add(assigneeId);
+        }
+
+        Object watcherList = data.get("watcher_ids");
+        if (watcherList instanceof List<?> watchers) {
+            for (Object o : watchers) {
+                Long uid = num(o);
+                if (uid == null) continue;
+                if (uid.equals(actorId)) continue;
+                if (notified.contains(uid)) continue;
+                notificationService.create(uid, "TASK_DELETED",
+                        "Task bạn đang theo dõi vừa bị xoá",
+                        title,
+                        "/projects/" + projectId,
+                        data);
+                notified.add(uid);
+            }
         }
     }
 
@@ -123,9 +164,9 @@ public class EventConsumer {
                 if (uid != null && !uid.equals(actorId)) {
                     Map<String, Object> meta = new HashMap<>(data);
                     notificationService.create(uid, "COMMENT_MENTION",
-                            "You were mentioned in a comment",
+                            "Bạn được nhắc đến trong một bình luận",
                             String.valueOf(data.getOrDefault("content_preview", "")),
-                            "/projects/" + projectId + "/tasks/" + taskId,
+                            taskLink(projectId, taskId),
                             meta);
                 }
             }
@@ -137,11 +178,16 @@ public class EventConsumer {
         Long projectId = num(data.get("project_id"));
         if (userId != null && !userId.equals(actorId)) {
             notificationService.create(userId, "MEMBER_INVITED",
-                    "You were invited to a project",
-                    "Role: " + data.get("role"),
+                    "Bạn được mời tham gia project",
+                    "Vai trò: " + data.get("role"),
                     "/projects/" + projectId,
                     data);
         }
+    }
+
+    private static String taskLink(Long projectId, Long taskId) {
+        if (projectId == null || taskId == null) return "/dashboard";
+        return "/projects/" + projectId + "?task=" + taskId;
     }
 
     private Long inferBoardFromData(Map<String, Object> data) {

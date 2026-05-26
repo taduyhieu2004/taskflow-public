@@ -25,6 +25,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
           AND (:projectId IS NULL OR t.projectId = :projectId)
           AND (:boardId IS NULL OR t.boardId = :boardId)
           AND (:listId IS NULL OR t.listId = :listId)
+          AND (:sprintId IS NULL OR t.sprintId = :sprintId)
           AND (:assigneeId IS NULL OR t.assigneeId = :assigneeId)
           AND (:priority IS NULL OR t.priority = :priority)
           AND (:q = '' OR LOWER(t.title) LIKE LOWER(CONCAT('%', :q, '%'))
@@ -33,6 +34,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     Page<Task> filter(@Param("projectId") Long projectId,
                       @Param("boardId") Long boardId,
                       @Param("listId") Long listId,
+                      @Param("sprintId") Long sprintId,
                       @Param("assigneeId") Long assigneeId,
                       @Param("priority") com.taskflow.task.constant.enums.Priority priority,
                       @Param("q") String q,
@@ -63,4 +65,6 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     int softDeleteByList(@Param("listId") Long listId);
 
     List<Task> findByListIdAndDeletedFalseOrderByPositionAsc(Long listId);
+
+    List<Task> findBySprintIdAndDeletedFalse(Long sprintId);
 }

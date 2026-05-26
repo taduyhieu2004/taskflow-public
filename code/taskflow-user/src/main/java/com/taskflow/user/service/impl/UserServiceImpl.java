@@ -183,6 +183,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
+    public UserResponse updateAvatar(Long userId, String storageKey) {
+        User user = loadById(userId);
+        user.setAvatarUrl(storageKey);
+        user = userRepository.save(user);
+        return userMapper.toResponse(user);
+    }
+
+    @Override
     public PageResponse<UserResponse> search(String q, int page, int size) {
         if (q == null || q.isBlank()) {
             throw new BadRequestException("query_required");
