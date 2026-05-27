@@ -70,4 +70,17 @@ export const projectsApi = {
     api
       .patch<ApiResponse<BoardList[]>>(`/boards/${boardId}/lists/reorder`, { items })
       .then(unwrap),
+
+  createBoard: (projectId: number, req: { name: string; description?: string; color?: string }) =>
+    api
+      .post<ApiResponse<Board>>(`/projects/${projectId}/boards`, req)
+      .then(unwrap),
+
+  updateBoard: (boardId: number, req: { name: string; description?: string; color?: string }) =>
+    api
+      .put<ApiResponse<Board>>(`/boards/${boardId}`, req)
+      .then(unwrap),
+
+  deleteBoard: (boardId: number) =>
+    api.delete<ApiResponse<void>>(`/boards/${boardId}`).then(unwrap),
 };

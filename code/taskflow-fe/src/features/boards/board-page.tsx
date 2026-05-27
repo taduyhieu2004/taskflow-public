@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Filter, Plus, Star, Tag, Target } from 'lucide-react';
+import { Activity, ChevronRight, Filter, Pencil, Plus, Star, Tag, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
@@ -31,6 +31,10 @@ import { sprintsApi } from '@/features/sprints/sprints-api';
 import { CreateTaskDialog } from '@/features/tasks/create-task-dialog';
 import { ManageLabelsDialog } from '@/features/tasks/manage-labels-dialog';
 import { TaskDetailPanel } from '@/features/tasks/task-detail-panel';
+import { ProjectActivitiesDialog } from '@/features/activities/project-activities-dialog';
+import { CreateBoardDialog } from '@/features/boards/create-board-dialog';
+import { EditBoardDialog } from '@/features/boards/edit-board-dialog';
+import { stompClient } from '@/lib/ws';
 import { extractErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { BoardList } from '@/types/project';
@@ -68,6 +72,10 @@ export function BoardPage() {
   const [newColumnName, setNewColumnName] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [labelsManagerOpen, setLabelsManagerOpen] = useState(false);
+  const [projectActivitiesOpen, setProjectActivitiesOpen] = useState(false);
+  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
+  const [createBoardOpen, setCreateBoardOpen] = useState(false);
+  const [editBoardOpen, setEditBoardOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('');
@@ -117,16 +125,66 @@ export function BoardPage() {
     enabled: !!projectId,
   });
 
+  const boardIdQueryParam = searchParams.get('board');
+  const boardIdFromQuery = boardIdQueryParam ? Number(boardIdQueryParam) : null;
   const boardIdFromList = boardsQuery.data?.[0]?.id ?? null;
+  const boardId = boardIdFromQuery ?? selectedBoardId ?? boardIdFromList;
 
   const boardDetailQuery = useQuery({
-    queryKey: ['board', boardIdFromList],
-    queryFn: () => projectsApi.board(boardIdFromList!),
-    enabled: !!boardIdFromList,
+    queryKey: ['board', boardId],
+    queryFn: () => projectsApi.board(boardId!),
+    enabled: !!boardId,
   });
 
   const board = boardDetailQuery.data ?? null;
-  const boardId = board?.id ?? boardIdFromList;
+
+  const handleBoardChange = (id: number) => {
+    setSelectedBoardId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('board', String(id));
+      return next;
+    }, { replace: true });
+  };
+
+  // WebSocket realtime board synchronization
+  useEffect(() => {
+    if (!boardId) return;
+
+    let unsub: (() => void) | undefined;
+    let intervalId: any;
+
+    const trySubscribe = () => {
+      if (stompClient.connected) {
+        try {
+          unsub = stompClient.subscribe<{ type: string; data: any }>(
+            `/topic/board/${boardId}`,
+            (payload) => {
+              console.log('Received board update via WebSocket:', payload);
+              // Invalidate tasks query to trigger refetch
+              queryClient.invalidateQueries({ queryKey: ['tasks', 'board', boardId] });
+            }
+          );
+          if (intervalId) clearInterval(intervalId);
+        } catch (e) {
+          console.error('Failed to subscribe to board topic:', e);
+        }
+      }
+    };
+
+    // Try immediately
+    trySubscribe();
+
+    // If not connected yet, poll every 1s until connected
+    if (!unsub) {
+      intervalId = setInterval(trySubscribe, 1000);
+    }
+
+    return () => {
+      unsub?.();
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [boardId, queryClient]);
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', 'board', boardId, searchQuery, filterPriority, filterAssignee, filterSprint],
@@ -303,6 +361,8 @@ export function BoardPage() {
   const project = projectQuery.data;
   const lists: BoardList[] = (board?.lists ?? []).slice().sort((a, b) => a.position - b.position);
   const labels = labelsQuery.data ?? [];
+  const myRole = project?.my_role;
+  const isAdminOrOwner = myRole === 'OWNER' || myRole === 'ADMIN';
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -316,7 +376,38 @@ export function BoardPage() {
         </div>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">{board?.name ?? 'Board'}</h1>
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl px-3 py-1.5 transition">
+              <span className="text-xs text-gray-400 font-semibold uppercase">Bảng:</span>
+              <select
+                value={boardId ?? ''}
+                onChange={(e) => handleBoardChange(Number(e.target.value))}
+                className="text-base font-bold text-gray-900 bg-transparent outline-none cursor-pointer pr-1"
+              >
+                {boardsQuery.data?.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {isAdminOrOwner && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCreateBoardOpen(true)}
+                  className="p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-50 rounded-xl border border-dashed border-gray-300 transition flex items-center justify-center"
+                  title="Tạo bảng Kanban mới"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setEditBoardOpen(true)}
+                  className="p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-50 rounded-xl border border-dashed border-gray-300 transition flex items-center justify-center"
+                  title="Chỉnh sửa thông tin bảng"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <button className="p-1 text-gray-400 hover:text-amber-500"><Star className="w-4 h-4" /></button>
           </div>
           <div className="flex items-center gap-3">
@@ -349,6 +440,15 @@ export function BoardPage() {
             >
               <Target className="w-4 h-4" /> Sprints
             </Link>
+            {isAdminOrOwner && (
+              <button
+                onClick={() => setProjectActivitiesOpen(true)}
+                className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-1.5 transition"
+                title="Lịch sử hoạt động của dự án"
+              >
+                <Activity className="w-4 h-4" /> Lịch sử dự án
+              </button>
+            )}
             <div className="flex items-center gap-3">
               {/* Stacked Avatars */}
               <Link 
@@ -596,6 +696,31 @@ export function BoardPage() {
           open={labelsManagerOpen}
           onOpenChange={setLabelsManagerOpen}
           projectId={projectId}
+        />
+      )}
+
+      {projectActivitiesOpen && (
+        <ProjectActivitiesDialog
+          open={projectActivitiesOpen}
+          onOpenChange={setProjectActivitiesOpen}
+          projectId={projectId}
+        />
+      )}
+
+      {createBoardOpen && (
+        <CreateBoardDialog
+          open={createBoardOpen}
+          onOpenChange={setCreateBoardOpen}
+          projectId={projectId}
+          onSuccess={(newBoardId) => handleBoardChange(newBoardId)}
+        />
+      )}
+
+      {editBoardOpen && (
+        <EditBoardDialog
+          open={editBoardOpen}
+          onOpenChange={setEditBoardOpen}
+          board={board}
         />
       )}
     </div>

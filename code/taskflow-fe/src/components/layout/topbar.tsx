@@ -1,4 +1,4 @@
-import { LogOut, Moon, Search, SquareKanban, UserCog } from 'lucide-react';
+import { LogOut, Search, SquareKanban, UserCog } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
@@ -35,9 +35,6 @@ export function Topbar() {
         </div>
 
         <div className="flex items-center gap-1">
-          <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg" title="Dark mode">
-            <Moon className="w-5 h-5" />
-          </button>
           <NotificationsDropdown />
 
           <Popover>

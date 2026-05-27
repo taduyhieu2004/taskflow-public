@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calendar, Camera, Hash, KeyRound, Mail, UserCog } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
@@ -13,20 +13,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { authApi } from '@/features/auth/auth-api';
+import { notificationsApi } from '@/features/notifications/notifications-api';
 import { extractErrorMessage, resolveAvatarUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+import type { UpdatePreferenceRequest } from '@/types/notification';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type Tab = 'profile' | 'password';
+type Tab = 'profile' | 'password' | 'notification';
 
 export function ProfileDialog({ open, onOpenChange }: Props) {
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
+  const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<Tab>('profile');
 
@@ -124,6 +127,37 @@ export function ProfileDialog({ open, onOpenChange }: Props) {
     passwordMutation.mutate();
   }
 
+  const prefQuery = useQuery({
+    queryKey: ['notifications', 'preference'],
+    queryFn: notificationsApi.preference,
+    enabled: open && tab === 'notification',
+  });
+
+  const prefMutation = useMutation({
+    mutationFn: (req: UpdatePreferenceRequest) => notificationsApi.updatePreference(req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'preference'] });
+    },
+  });
+
+  const handleToggleInApp = (checked: boolean) => {
+    prefMutation.mutate({ in_app_enabled: checked });
+  };
+
+  const handleToggleEmail = (checked: boolean) => {
+    prefMutation.mutate({ email_enabled: checked });
+  };
+
+  const handleToggleType = (type: string, checked: boolean) => {
+    const currentSettings = prefQuery.data?.per_type_settings ?? {};
+    prefMutation.mutate({
+      per_type_settings: {
+        ...currentSettings,
+        [type]: checked,
+      },
+    });
+  };
+
   if (!user) return null;
 
   return (
@@ -203,6 +237,9 @@ export function ProfileDialog({ open, onOpenChange }: Props) {
           <TabBtn active={tab === 'password'} onClick={() => setTab('password')}>
             Đổi mật khẩu
           </TabBtn>
+          <TabBtn active={tab === 'notification'} onClick={() => setTab('notification')}>
+            Nhận thông báo
+          </TabBtn>
         </div>
 
         {tab === 'profile' ? (
@@ -261,7 +298,7 @@ export function ProfileDialog({ open, onOpenChange }: Props) {
               </Button>
             </DialogFooter>
           </form>
-        ) : (
+        ) : tab === 'password' ? (
           <form onSubmit={handlePasswordSubmit} className="space-y-3">
             <div>
               <label className="text-xs font-semibold text-gray-700 inline-flex items-center gap-1">
@@ -325,9 +362,142 @@ export function ProfileDialog({ open, onOpenChange }: Props) {
               </Button>
             </DialogFooter>
           </form>
+        ) : (
+          <div className="space-y-4">
+            {prefQuery.isLoading ? (
+              <p className="text-xs text-gray-400 py-6 text-center font-sans">Đang tải cấu hình…</p>
+            ) : prefQuery.isError ? (
+              <p className="text-xs text-rose-600 py-6 text-center font-sans">Không thể tải cấu hình thông báo.</p>
+            ) : (
+              <div className="space-y-5">
+                {/* Global switches */}
+                <div className="space-y-3 bg-gray-50 p-3.5 rounded-xl border border-gray-100 font-sans">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Kênh nhận thông báo</p>
+                  
+                  <label className="flex items-center justify-between cursor-pointer group py-1">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">Thông báo trong ứng dụng</p>
+                      <p className="text-xs text-gray-500">Hiển thị quả chuông và thông báo nổi</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={prefQuery.data?.in_app_enabled ?? true}
+                      onChange={(e) => handleToggleInApp(e.target.checked)}
+                      disabled={prefMutation.isPending}
+                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300 cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer group py-1">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">Thông báo qua Email</p>
+                      <p className="text-xs text-gray-500">Gửi cập nhật hoạt động đến hòm thư điện tử</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={prefQuery.data?.email_enabled ?? false}
+                      onChange={(e) => handleToggleEmail(e.target.checked)}
+                      disabled={prefMutation.isPending}
+                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300 cursor-pointer"
+                    />
+                  </label>
+                </div>
+
+                {/* Per-type settings */}
+                <div className="space-y-3 font-sans">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Nhận thông báo khi</p>
+                  
+                  <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                    <NotificationTypeToggle
+                      label="Được giao công việc (Task) mới"
+                      description="Có ai đó phân công công việc cho bạn thực hiện"
+                      checked={prefQuery.data?.per_type_settings?.TASK_ASSIGNED ?? true}
+                      onChange={(checked) => handleToggleType('TASK_ASSIGNED', checked)}
+                      disabled={prefMutation.isPending || !(prefQuery.data?.in_app_enabled ?? true)}
+                    />
+                    <NotificationTypeToggle
+                      label="Công việc quá hạn"
+                      description="Công việc được giao quá thời gian Deadline mà chưa hoàn thành"
+                      checked={prefQuery.data?.per_type_settings?.TASK_OVERDUE ?? true}
+                      onChange={(checked) => handleToggleType('TASK_OVERDUE', checked)}
+                      disabled={prefMutation.isPending || !(prefQuery.data?.in_app_enabled ?? true)}
+                    />
+                    <NotificationTypeToggle
+                      label="Công việc sắp đến hạn"
+                      description="Hệ thống nhắc nhở trước khi hết hạn công việc"
+                      checked={prefQuery.data?.per_type_settings?.TASK_DUE_SOON ?? true}
+                      onChange={(checked) => handleToggleType('TASK_DUE_SOON', checked)}
+                      disabled={prefMutation.isPending || !(prefQuery.data?.in_app_enabled ?? true)}
+                    />
+                    <NotificationTypeToggle
+                      label="Công việc bị xoá"
+                      description="Công việc bạn tham gia hoặc theo dõi bị xoá khỏi bảng"
+                      checked={prefQuery.data?.per_type_settings?.TASK_DELETED ?? true}
+                      onChange={(checked) => handleToggleType('TASK_DELETED', checked)}
+                      disabled={prefMutation.isPending || !(prefQuery.data?.in_app_enabled ?? true)}
+                    />
+                    <NotificationTypeToggle
+                      label="Được mời tham gia dự án"
+                      description="Có người thêm bạn vào danh sách thành viên của dự án mới"
+                      checked={prefQuery.data?.per_type_settings?.MEMBER_INVITED ?? true}
+                      onChange={(checked) => handleToggleType('MEMBER_INVITED', checked)}
+                      disabled={prefMutation.isPending || !(prefQuery.data?.in_app_enabled ?? true)}
+                    />
+                  </div>
+                </div>
+
+                {prefMutation.isPending && (
+                  <p className="text-[10px] text-gray-400 italic text-right font-sans">Đang tự động lưu thay đổi…</p>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="pt-2">
+              <DialogClose asChild>
+                <Button type="button" variant="secondary" size="sm" className="rounded-lg font-sans">
+                  Đóng
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </div>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function NotificationTypeToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-start justify-between p-3.5 cursor-pointer select-none transition-colors font-sans",
+        disabled ? "opacity-50 cursor-not-allowed bg-gray-50/50" : "hover:bg-gray-50"
+      )}
+    >
+      <div className="flex-1 pr-4 min-w-0">
+        <p className="text-sm font-semibold text-gray-800">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        className="w-4 h-4 mt-0.5 rounded text-primary-600 focus:ring-primary-500 border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+      />
+    </label>
   );
 }
 

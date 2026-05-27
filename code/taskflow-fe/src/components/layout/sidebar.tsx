@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Folder, LayoutDashboard, LogOut, Plus, UserCheck, UserCog } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Folder, Kanban, LayoutDashboard, LogOut, Plus, UserCheck, UserCog } from 'lucide-react';
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
 import { ProfileDialog } from '@/features/auth/profile-dialog';
 import { useLogout } from '@/features/auth/use-logout';
@@ -14,8 +14,12 @@ import { useAuthStore } from '@/stores/auth-store';
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
+  const location = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  const match = location.pathname.match(/\/projects\/(\d+)/);
+  const activeProjectId = match ? Number(match[1]) : null;
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -48,19 +52,11 @@ export function Sidebar() {
           </button>
         </div>
         {projects.map((p) => (
-          <NavLink
+          <ProjectSidebarItem
             key={p.id}
-            to={`/projects/${p.id}`}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg',
-                isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700 hover:bg-gray-100',
-              )
-            }
-          >
-            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
-            <span className="truncate">{p.name}</span>
-          </NavLink>
+            project={p}
+            activeProjectId={activeProjectId}
+          />
         ))}
         {projects.length === 0 && (
           <div className="px-3 py-2 text-xs text-gray-400">Chưa có project nào</div>
@@ -125,5 +121,60 @@ function NavItem({ to, icon, children }: { to: string; icon: React.ReactNode; ch
       {icon}
       {children}
     </NavLink>
+  );
+}
+
+function ProjectSidebarItem({ project, activeProjectId }: { project: import('@/types/project').Project; activeProjectId: number | null }) {
+  const isCurrentProject = project.id === activeProjectId;
+  const [expanded, setExpanded] = useState(isCurrentProject);
+
+  const { data: boards = [], isLoading } = useQuery({
+    queryKey: ['boards', project.id],
+    queryFn: () => projectsApi.boards(project.id),
+    enabled: expanded,
+  });
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          'w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-left outline-none',
+          isCurrentProject ? 'bg-primary-50/50 text-primary-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'
+        )}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
+          <span className="truncate">{project.name}</span>
+        </div>
+        {expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+      </button>
+
+      {expanded && (
+        <div className="pl-6 space-y-0.5 border-l border-gray-100 ml-4 mt-0.5">
+          {isLoading ? (
+            <p className="text-[11px] text-gray-400 py-1 pl-2 font-sans">Đang tải...</p>
+          ) : boards.length === 0 ? (
+            <p className="text-[11px] text-gray-400 py-1 pl-2 italic font-sans">Chưa có bảng nào</p>
+          ) : (
+            boards.map((b) => (
+              <NavLink
+                key={b.id}
+                to={`/projects/${project.id}?board=${b.id}`}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-md transition-colors font-sans',
+                    isActive ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                  )
+                }
+              >
+                <Kanban className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                <span className="truncate">{b.name}</span>
+              </NavLink>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -14,10 +14,37 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { projectsApi } from '@/features/projects/projects-api';
 import { extractErrorMessage } from '@/lib/api';
+import type { ProjectType } from '@/types/project';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+function generateProjectKey(projectName: string): string {
+  // Remove Vietnamese diacritics
+  const withoutDiacritics = projectName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd');
+
+  // Keep only alphanumeric and spaces
+  const cleaned = withoutDiacritics.replace(/[^a-zA-Z0-9\s]/g, '');
+
+  const words = cleaned.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+
+  if (words.length === 1) {
+    // If only one word, take the first 3 characters, uppercase
+    return words[0].substring(0, 3).toUpperCase();
+  }
+
+  // If multiple words, take the first letter of each word
+  return words
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 10);
 }
 
 export function CreateProjectDialog({ open, onOpenChange }: Props) {
@@ -25,6 +52,8 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
+  const [type, setType] = useState<ProjectType>('SOFTWARE');
+  const [isKeyManuallyEdited, setIsKeyManuallyEdited] = useState(false);
 
   const mutation = useMutation({
     mutationFn: projectsApi.create,
@@ -39,8 +68,23 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
     setName('');
     setKey('');
     setDescription('');
+    setType('SOFTWARE');
+    setIsKeyManuallyEdited(false);
     mutation.reset();
   }
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!isKeyManuallyEdited) {
+      setKey(generateProjectKey(val));
+    }
+  };
+
+  const handleKeyChange = (val: string) => {
+    const formatted = val.toUpperCase();
+    setKey(formatted);
+    setIsKeyManuallyEdited(true);
+  };
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +92,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
       name: name.trim(),
       key: key.trim().toUpperCase(),
       description: description.trim() || undefined,
+      type,
     });
   }
 
@@ -71,7 +116,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
             <Input
               id="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               required
               maxLength={255}
               placeholder="Ví dụ: TaskFlow Mobile"
@@ -84,13 +129,27 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
             <Input
               id="key"
               value={key}
-              onChange={(e) => setKey(e.target.value.toUpperCase())}
+              onChange={(e) => handleKeyChange(e.target.value)}
               required
               maxLength={10}
               pattern="^[A-Z][A-Z0-9]{1,9}$"
               placeholder="TFM"
               className="uppercase"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="type">Loại dự án</Label>
+            <select
+              id="type"
+              value={type}
+              onChange={(e) => setType(e.target.value as ProjectType)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+            >
+              <option value="SOFTWARE">SOFTWARE (Phát triển phần mềm)</option>
+              <option value="BUSINESS">BUSINESS (Doanh nghiệp/Kinh doanh)</option>
+              <option value="PERSONAL">PERSONAL (Cá nhân/Học tập)</option>
+            </select>
           </div>
 
           <div className="space-y-1.5">
