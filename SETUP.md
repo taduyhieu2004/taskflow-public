@@ -31,7 +31,6 @@ Hai cách chạy hệ thống:
 ## 2. Chạy bằng Docker Compose ⭐
 
 ```bash
-cd /home/hieu/Documents/ms
 cp .env.example .env           # chỉnh credentials / port nếu cần
 docker compose up -d --build
 ```
