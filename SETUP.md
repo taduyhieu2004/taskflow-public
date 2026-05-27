@@ -84,25 +84,8 @@ Swagger trực tiếp từng service:
 
 > Lưu ý: docker-compose **chỉ expose port 8080 (Gateway) và 5173 (FE)** ra host. Các service backend (8081–8085) chỉ truy cập được trong network nội bộ `taskflow`. Nếu cần expose để xem Swagger, thêm block `ports` vào service tương ứng trong `docker-compose.yml`.
 
-### 2.3 Tài khoản seed
 
-Sau khi container `user-service` UP, có thể chạy script seed mẫu:
-
-```bash
-python3 seed_taskflow.py
-```
-
-Script tạo 3 user + 1 project + 3 sprint + 5 nhãn + 26 task. Đăng nhập FE với:
-
-| Username | Password | Vai trò |
-|---|---|---|
-| `taduyhieu` | `hieu112004` | Team lead (Gateway/User/Collab/Notification/FE) |
-| `levantuong` | `tuong112004` | Project Service |
-| `buiconghau` | `hau112004` | Task Service |
-
-Nếu chưa có `taduyhieu`, đăng ký qua FE hoặc cURL ở `§ 4.1` trước khi chạy seed.
-
-### 2.4 Dừng & dọn
+### 2.3 Dừng & dọn
 
 ```bash
 docker compose down              # tắt container, GIỮ volume (DB còn data)
@@ -110,7 +93,7 @@ docker compose down -v           # tắt + xoá volume → reset toàn bộ DB/M
 docker compose build --no-cache  # rebuild khi sửa code mà cache bị stale
 ```
 
-### 2.5 Rebuild 1 service sau khi sửa code
+### 2.4 Rebuild 1 service sau khi sửa code
 
 ```bash
 docker compose up -d --build task-service
