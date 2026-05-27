@@ -1,51 +1,43 @@
-# TaskFlow — Hệ thống Quản lý Công việc & Kanban Board Phân tán
+# TaskFlow
 
-**TaskFlow** là một nền tảng quản lý dự án và cộng tác trực quan thời gian thực được thiết kế theo kiến trúc vi dịch vụ (Microservices). Ứng dụng hỗ trợ các nhóm làm việc cộng tác mượt mà, quản lý công việc qua các Kanban Board động, trao đổi qua bình luận và cập nhật trạng thái tức thời thông qua kết nối thời gian thực.
+TaskFlow là hệ thống quản lý công việc theo mô hình Kanban Board, được phát triển trên kiến trúc Microservices sử dụng Spring Cloud (Java) và React (TypeScript).
 
----
+Hệ thống hỗ trợ làm việc nhóm trực quan, cập nhật trạng thái công việc thời gian thực (Real-time), quản lý tệp đính kèm và phân quyền thành viên chặt chẽ theo dự án.
 
-## ✨ Tính năng Nổi bật
+## Các chức năng chính
 
-- **Kanban Board Đa dạng & Trực quan:** Hỗ trợ tạo nhiều bảng công việc (Board) cho mỗi dự án, kéo thả chuyển trạng thái công việc mượt mà.
-- **Cập nhật Thời gian thực (Real-time Collaboration):** Đồng bộ hóa tức thì trạng thái của các thẻ công việc (Task) và hoạt động trên bảng nhờ tích hợp WebSockets và Redis Pub/Sub.
-- **Quản lý Công việc Toàn diện:** Gán người thực hiện (Assignee), đặt thời hạn (Deadline), thêm đính kèm tệp tin, viết bình luận, và theo dõi lịch sử hoạt động chi tiết.
-- **Hệ thống Thông báo Thông minh:** Tự động gửi cảnh báo khi công việc sắp đến hạn, quá hạn hoặc khi được giao việc mới. Người dùng có thể tùy chỉnh nhận thông báo linh hoạt (qua ứng dụng hoặc Email).
-- **Quản lý Thành viên & Phân quyền (RBAC):** Phân quyền chi tiết theo vai trò thành viên dự án (`OWNER`, `ADMIN`, `EDITOR`, `COMMENTER`, `VIEWER`).
+- **Bảng Kanban đa dạng:** Mỗi dự án có thể tạo nhiều board công việc khác nhau, kéo thả trạng thái linh hoạt.
+- **Đồng bộ thời gian thực:** Trạng thái các task được đồng bộ tức thì giữa các thành viên nhờ WebSocket và Redis Pub/Sub.
+- **Quản lý công việc chi tiết:** Giao việc (Assign), đặt deadline, đính kèm file, viết bình luận và theo dõi log hoạt động của task.
+- **Cấu hình thông báo cá nhân:** Nhận thông báo qua Email hoặc In-app (hệ thống chuông báo) khi có công việc mới, quá hạn, hoặc được mời vào dự án.
+- **Phân quyền thành viên (RBAC):** Phân quyền chi tiết theo vai trò thành viên trong dự án (`OWNER`, `ADMIN`, `EDITOR`, `COMMENTER`, `VIEWER`).
 
----
+## Thành phần hệ thống
 
-## 🛠️ Công nghệ Sử dụng
+### Frontend
+- **Mã nguồn:** Thư mục `code/taskflow-fe` (React 18, Vite, TypeScript, Tailwind CSS, TanStack Query).
+- **Kết nối:** Giao tiếp qua REST API và WebSockets với Gateway.
 
-### Frontend (`taskflow-fe`)
-- **Core:** React 18, Vite, TypeScript
-- **Styling:** Tailwind CSS, Shadcn UI
-- **State Management & Data Fetching:** TanStack Query (React Query)
-- **Real-time:** WebSockets
-
-### Backend Microservices (`Spring Cloud`)
-- **Dịch vụ Đăng ký & Cấu hình Hệ thống:**
-  - `taskflow-eureka`: Spring Cloud Eureka Discovery Server (Đăng ký và phát hiện dịch vụ).
-  - `taskflow-config`: Spring Cloud Config Server (Quản lý cấu hình tập trung cho toàn bộ service).
-  - `taskflow-gateway`: Spring Cloud API Gateway (Cổng định tuyến duy nhất cho toàn hệ thống, xác thực token JWT, chạy ở port `8080`).
-- **Các Dịch vụ Nghiệp vụ (Spring Boot):**
-  - `taskflow-user` (User Service - Port `8081`): Xác thực người dùng (JWT), quản lý thông tin cá nhân và tải ảnh đại diện lên MinIO.
-  - `taskflow-project` (Project Service - Port `8082`): Quản lý dự án, quản lý các bảng (Board) trong dự án và phân quyền thành viên.
-  - `taskflow-task` (Task Service - Port `8083`): Quản lý thẻ công việc (Tasks), gán việc, và quản lý các cột trạng thái công việc.
-  - `taskflow-collab` (Collab Service - Port `8084`): Quản lý các tương tác cộng tác như bình luận (Comments) và tệp đính kèm (Attachments) liên kết với MinIO.
-  - `taskflow-notification` (Notification Service - Port `8085`): Xử lý cấu hình thông báo cá nhân, lưu trữ và gửi thông báo realtime (WebSocket) hoặc email.
+### Backend Microservices (Spring Boot & Spring Cloud)
+- **Hệ thống bổ trợ:**
+  - `taskflow-eureka`: Service Registry để đăng ký và phát hiện dịch vụ.
+  - `taskflow-config`: Quản lý cấu hình tập trung.
+  - `taskflow-gateway` (Port `8080`): API Gateway điều phối request, xác thực token JWT.
+- **Các service nghiệp vụ:**
+  - `taskflow-user` (Port `8081`): Xác thực người dùng, thông tin cá nhân và upload avatar.
+  - `taskflow-project` (Port `8082`): Quản lý dự án, boards, và thành viên dự án.
+  - `taskflow-task` (Port `8083`): Quản lý thẻ công việc (Tasks) và cột trạng thái.
+  - `taskflow-collab` (Port `8084`): Quản lý bình luận (Comments) và tệp đính kèm (Attachments).
+  - `taskflow-notification` (Port `8085`): Quản lý cấu hình, lưu trữ và đẩy thông báo (WebSocket/Email).
 - **Thư viện dùng chung:**
-  - `taskflow-common`: Thư viện định nghĩa các cấu hình dùng chung (Security, Exception Handler, DTO, Database).
-  - `taskflow-events-contract`: Định nghĩa các cấu hình Event Schema cho việc trao đổi message không đồng bộ qua RabbitMQ.
+  - `taskflow-common`: Chứa cấu hình bảo mật, xử lý ngoại lệ và DTO dùng chung.
+  - `taskflow-events-contract`: Chứa các Event Schema trao đổi qua RabbitMQ.
 
-### Hạ tầng & Lưu trữ (Infrastructure)
-- **Cơ sở dữ liệu:** PostgreSQL (Lưu trữ chính)
-- **Caching & Message Broker:** Redis (Pub/Sub & Cache), RabbitMQ (Hàng đợi tin nhắn bất đồng bộ)
-- **Object Storage:** MinIO (Tương thích S3 API, dùng lưu trữ ảnh đại diện và tệp đính kèm)
+### Hạ tầng bổ trợ
+- **Cơ sở dữ liệu:** PostgreSQL (lưu trữ dữ liệu nghiệp vụ).
+- **Caching & Broker:** Redis (cache & pub/sub), RabbitMQ (hàng đợi message).
+- **Object Storage:** MinIO (lưu trữ avatar và tệp đính kèm).
 
----
+## Hướng dẫn cài đặt và khởi chạy
 
-## 🚀 Hướng dẫn Cài đặt & Chạy Hệ thống
-
-Để xem hướng dẫn chi tiết cách thiết lập môi trường, cấu hình và chạy hệ thống TaskFlow (bằng **Docker Compose** hoặc chạy **Manual từng dịch vụ** để phục vụ việc phát triển), vui lòng tham khảo tài liệu hướng dẫn tại đây:
-
-👉 [**Tài liệu Hướng dẫn Cài đặt & Setup chi tiết (SETUP.md)**](file:///home/hieu/Documents/ms/SETUP.md)
+Vui lòng đọc file [SETUP.md](SETUP.md) để xem chi tiết hướng dẫn cấu hình môi trường và chạy hệ thống bằng Docker Compose hoặc chạy thủ công từng service.
